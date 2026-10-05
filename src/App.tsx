@@ -4,6 +4,7 @@ import { Vector3 } from 'three'
 import { AdaptiveFov } from './AdaptiveFov'
 import { CAMERA_FAR, CAMERA_FOV, CAMERA_NEAR } from './core/constants'
 import { OriginContext, floatingOrigin } from './core/originContext'
+import { CollisionDebug } from './debug/CollisionDebug'
 import { useDebugKeys } from './debug/useDebugKeys'
 import { Planet } from './planet/Planet'
 import { planetConfig } from './planet/PlanetConfig'
@@ -46,6 +47,7 @@ function App() {
         <directionalLight position={[0.55, 0.4, 1]} intensity={2.6} />
         <Player planet={moon} />
         <Planet config={moon} />
+        <CollisionDebug planet={moon} />
       </Canvas>
       <ShipHud />
       <DebugHud />

@@ -1,12 +1,15 @@
 import { useFrame, useThree } from '@react-three/fiber'
-import { useRef } from 'react'
+import { useMemo, useRef } from 'react'
+import { Vector3 } from 'three'
 import type { Group } from 'three'
 import { MAX_FRAME_DELTA, PRIORITY_PLAYER } from '../core/constants'
 import { useOrigin } from '../core/originContext'
+import { collisionPatches } from '../physics/collisionPatches'
+import { groundGuard, resolveShipCollision } from '../physics/shipCollision'
 import type { PlanetConfig } from '../planet/PlanetConfig'
 import { updateChaseCamera } from './chaseCamera'
 import { stepFlycam } from './flycam'
-import { ControlMode, playerState } from './PlayerState'
+import { ControlMode, HyperState, playerState } from './PlayerState'
 import { ShipModel } from './ShipModel'
 import { stepShip } from './shipFlight'
 import type { ShipInput } from './shipFlight'
@@ -26,6 +29,7 @@ const input: ShipInput = {
   hyperHeld: false,
   hyperPressed: false,
 }
+const prevAbs = new Vector3()
 
 type Props = {
   /** The planet whose atmosphere the ship flies in. */
@@ -48,6 +52,7 @@ export function Player({ planet }: Props) {
   const ship = useRef<Group>(null)
   // Previous frame's key state, for edge-triggered bindings.
   const prev = useRef({ space: false, v: false })
+  const planets = useMemo(() => [planet], [planet])
 
   useFrame((_, delta) => {
     const dt = Math.min(delta, MAX_FRAME_DELTA)
@@ -83,7 +88,16 @@ export function Player({ planet }: Props) {
     input.roll = (held.has('KeyA') ? 1 : 0) - (held.has('KeyD') ? 1 : 0)
     input.hyperHeld = space
     input.hyperPressed = spacePressed
+
+    // --- tiles for this frame's path, the flight model, then collision (docs/05).
+    // The patch runs first so the colliders it enables are flushed before the sweep.
+    prevAbs.copy(player.absPosition)
+    collisionPatches.update(planets, player.absPosition, player.velocity)
     stepShip(player, input, planet, dt)
+    if (player.hyper.state !== HyperState.Engaged) {
+      resolveShipCollision(player, prevAbs, planet, origin.origin)
+      groundGuard(player, planet)
+    }
 
     // --- origin, then ship and camera. Order matters: both must see the new origin.
     origin.update(player.absPosition)

@@ -47,6 +47,11 @@ function buildUv(): BufferAttribute {
 const sharedIndex = buildIndex()
 const sharedUv = buildUv()
 
+/** The shared chunk index, read-only. Collision tiles build their trimeshes from it. */
+export function chunkIndexAttribute(): BufferAttribute {
+  return sharedIndex
+}
+
 /**
  * Free list of chunk geometries.
  *

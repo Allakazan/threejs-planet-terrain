@@ -12,6 +12,17 @@ export function toggleTerrainPanel(): void {
   for (const listener of listeners) listener()
 }
 
+/** Collision tile wireframe. Read per frame by `CollisionDebug`, so no React store. */
+let collisionWire = false
+
+export function toggleCollisionWire(): void {
+  collisionWire = !collisionWire
+}
+
+export function isCollisionWireEnabled(): boolean {
+  return collisionWire
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   return () => {

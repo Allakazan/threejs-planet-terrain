@@ -93,3 +93,71 @@ export function faceToSphere(faceIndex: number, u: number, v: number, out: Vecto
     out,
   ).normalize()
 }
+
+export type FacePoint = { face: number; u: number; v: number }
+
+/** Newton stops here; a few steps reach it from the cube-projection guess. */
+const NEWTON_TOLERANCE = 1e-14
+const NEWTON_MAX_STEPS = 8
+/** Finite-difference step for the Jacobian. */
+const NEWTON_H = 1e-7
+
+const scratchSphere = new Vector3()
+
+/** `dir`'s gnomonic coordinates on `face`: the plain cube projection, no spherify. */
+function gnomonic(face: FaceBasis, dir: Vector3, out: FacePoint): void {
+  const f = dir.dot(face.forward)
+  out.u = dir.dot(face.right) / f
+  out.v = dir.dot(face.up) / f
+}
+
+/**
+ * Unit direction → face-local `(u,v)`: the inverse of `faceToSphere`.
+ *
+ * The face is the dominant axis; `spherify` keeps a point on its own face, with
+ * the face edges mapping onto the cube's diagonal planes. `(u,v)` starts from the
+ * gnomonic projection and is refined by Newton's method on that same projection
+ * of `faceToSphere`, which is smooth and close to the identity. Allocation-free.
+ */
+export function sphereToFace(dir: Vector3, out: FacePoint): FacePoint {
+  const ax = Math.abs(dir.x)
+  const ay = Math.abs(dir.y)
+  const az = Math.abs(dir.z)
+  let face: number
+  if (ax >= ay && ax >= az) face = dir.x >= 0 ? 0 : 1
+  else if (ay >= az) face = dir.y >= 0 ? 2 : 3
+  else face = dir.z >= 0 ? 4 : 5
+  const basis = FACES[face]
+
+  // Target, and the starting guess: the gnomonic coordinates of `dir`.
+  gnomonic(basis, dir, out)
+  const tu = out.u
+  const tv = out.v
+  let u = tu
+  let v = tv
+
+  for (let i = 0; i < NEWTON_MAX_STEPS; i++) {
+    gnomonic(basis, faceToSphere(face, u, v, scratchSphere), out)
+    const ru = out.u - tu
+    const rv = out.v - tv
+    if (Math.abs(ru) < NEWTON_TOLERANCE && Math.abs(rv) < NEWTON_TOLERANCE) break
+    const gu = out.u
+    const gv = out.v
+
+    gnomonic(basis, faceToSphere(face, u + NEWTON_H, v, scratchSphere), out)
+    const a = (out.u - gu) / NEWTON_H
+    const c = (out.v - gv) / NEWTON_H
+    gnomonic(basis, faceToSphere(face, u, v + NEWTON_H, scratchSphere), out)
+    const b = (out.u - gu) / NEWTON_H
+    const d = (out.v - gv) / NEWTON_H
+
+    const det = a * d - b * c
+    u -= (d * ru - b * rv) / det
+    v -= (a * rv - c * ru) / det
+  }
+
+  out.face = face
+  out.u = Math.min(1, Math.max(-1, u))
+  out.v = Math.min(1, Math.max(-1, v))
+  return out
+}

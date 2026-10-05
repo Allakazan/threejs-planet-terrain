@@ -117,7 +117,7 @@ export type ThrustProfile = {
 /** W */
 export const THRUST_IMPULSE: ThrustProfile = { maxSpeedSpace: 250, maxSpeedSurface: 150, accelTime: 4 }
 /** Shift */
-export const THRUST_CRUISE: ThrustProfile = { maxSpeedSpace: 30_000, maxSpeedSurface: 10_000, accelTime: 4 }
+export const THRUST_CRUISE: ThrustProfile = { maxSpeedSpace: 30_000, maxSpeedSurface: 7_000, accelTime: 4 }
 /** S, once stopped */
 export const MAX_REVERSE_SPEED = 50
 export const REVERSE_ACCEL_TIME = 2
@@ -165,6 +165,45 @@ export const CHASE_OFFSET: readonly [number, number, number] = [0, 4, 18]
 /** 1/s — how fast the camera's orientation catches up with the ship's. */
 export const CAMERA_ROT_LAG = 6
 
+// --- collision (see docs/05) ---
+// The patch is active inside a planet's atmosphere (`ATMOSPHERE_HEIGHT`), and only
+// builds tiles where the ship's predicted path comes near the terrain.
+
+/** Root tiles: ~1.4 km at Moon scale. Coarsest level the patch ever builds. */
+export const COLLISION_MIN_LEVEL = 12
+/** Finest tile: ~22 m, 0.7 m quads. Must not exceed `MAX_LOD_LEVEL`. */
+export const COLLISION_MAX_LEVEL = 18
+/** Split a tile when the ship is closer than `arc · COLLISION_SPLIT_FACTOR`. */
+export const COLLISION_SPLIT_FACTOR = 2
+/** Seconds of travel the patch covers ahead of the ship. Hides the worker round trip. */
+export const COLLISION_LOOKAHEAD = 0.5
+/**
+ * Radius of the swept capsule tiles must touch, metres: the ship's reach (~9 m)
+ * plus margin. Each tile adds its own reach on top, so this stays small.
+ */
+export const COLLISION_PATH_RADIUS = 25
+/** Tiles once wanted are kept until the capsule is this much wider, so edges don't thrash. */
+export const COLLISION_KEEP_FACTOR = 1.5
+/** Slack above `maxElevation` before the capsule counts as near the terrain, metres. */
+export const COLLISION_MARGIN = 200
+/** Fraction of the into-ground speed given back on impact. */
+export const COLLISION_RESTITUTION = 0.4
+/** Coulomb-style: tangential speed lost per unit of normal impulse. */
+export const COLLISION_FRICTION = 0.3
+/** m/s — every contact leaves at least this fast, so a graze can't stick. */
+export const COLLISION_MIN_BOUNCE = 3
+/** Distance the swept ship stops short of the surface, metres. */
+export const COLLISION_SKIN = 0.05
+
+/** The ground guard only acts this far below the surface, so it never fights the tiles. */
+export const GROUND_GUARD_DEPTH = 1
+/** Where the guard puts the ship's lowest point, above the surface. */
+export const GROUND_CLEARANCE = 0.5
+
+/** Collision box of the ~12 m ship (`ShipModel`), in its local frame. */
+export const SHIP_HALF_EXTENTS: readonly [number, number, number] = [5.8, 1.9, 6]
+export const SHIP_COLLIDER_OFFSET: readonly [number, number, number] = [0, 0.8, -1]
+
 // --- camera ---
 
 export const CAMERA_NEAR = 0.1
@@ -180,6 +219,14 @@ export const CAMERA_FOV = 50
  */
 export const PRIORITY_PLAYER = -20
 export const PRIORITY_PLANET = -10
+
+// --- render order ---
+// Terrain draws at the default 0. Debug overlays that skip the depth test draw
+// next, then the ship, which still depth-tests against the terrain and so covers
+// the overlays wherever it is in front.
+
+export const RENDER_ORDER_DEBUG = 1
+export const RENDER_ORDER_SHIP = 2
 
 // --- debug ---
 

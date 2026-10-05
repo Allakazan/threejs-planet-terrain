@@ -3,6 +3,7 @@ import { useRef } from 'react'
 import type { Ref } from 'react'
 import { MeshStandardMaterial } from 'three'
 import type { Group } from 'three'
+import { RENDER_ORDER_SHIP } from '../core/constants'
 import { ControlMode, playerState } from './PlayerState'
 
 // Module scope: one set of materials however often the ship remounts.
@@ -46,7 +47,9 @@ export function ShipModel({ ref }: Props) {
 
   return (
     <group ref={ref}>
-      <group ref={pivot}>
+      {/* After the debug overlays. three takes a mesh's group order from its
+          *nearest* Group ancestor, so this goes on the innermost group. */}
+      <group ref={pivot} renderOrder={RENDER_ORDER_SHIP}>
         {/* fuselage + nose */}
         <mesh material={hull} rotation-x={HALF_PI}>
           <cylinderGeometry args={[0.9, 1.1, 8, 12]} />
