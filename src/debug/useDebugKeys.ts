@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { isEditableTarget } from '../core/keyboard'
 import { isGridEnabled, setGridEnabled } from '../planet/chunkMaterial'
-import { toggleTerrainPanel } from './debugToggles'
+import { toggleCollisionWire, toggleTerrainPanel } from './debugToggles'
 
 /**
  * Debug keybinds, in one place. Call it once, from `App` — the grid uniform is
@@ -15,6 +15,7 @@ export function useDebugKeys(): void {
       if (event.repeat || isEditableTarget(event)) return
       if (event.code === 'KeyG') setGridEnabled(!isGridEnabled())
       if (event.code === 'KeyT') toggleTerrainPanel()
+      if (event.code === 'KeyC') toggleCollisionWire()
     }
 
     window.addEventListener('keydown', onKeyDown)

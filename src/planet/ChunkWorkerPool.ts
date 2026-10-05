@@ -15,6 +15,12 @@ type Job = {
    */
   readonly centreAbs: Vector3
   readonly onReady: (result: ChunkResult) => void
+  /**
+   * Collision tiles: dispatched before any render chunk and delivered outside the
+   * upload budget. There are only ever a few dozen; a late one is a tunnel, and
+   * inserting a collider costs nothing like a GPU upload.
+   */
+  readonly urgent: boolean
 }
 
 /** Everything but the id, which the pool assigns. */
@@ -68,10 +74,10 @@ export class ChunkWorkerPool {
     }
   }
 
-  /** Queues a chunk build. Returns the id to pass to `cancel`. */
-  request(spec: ChunkSpec, centreAbs: Vector3, onReady: (result: ChunkResult) => void): number {
+  /** Queues a chunk build. Returns the id to pass to `cancel`. See `Job.urgent`. */
+  request(spec: ChunkSpec, centreAbs: Vector3, onReady: (result: ChunkResult) => void, urgent = false): number {
     const id = this.nextId++
-    this.queue.push({ req: { ...spec, id }, centreAbs, onReady })
+    this.queue.push({ req: { ...spec, id }, centreAbs, onReady, urgent })
     return id
   }
 
@@ -140,9 +146,18 @@ export class ChunkWorkerPool {
   }
 
   private deliver(): void {
-    for (let i = 0; i < MAX_UPLOADS_PER_FRAME && this.arrived.length > 0; i++) {
-      // Shift is fine: `arrived` holds at most WORKER_COUNT entries.
-      const entry = this.arrived.shift()!
+    let uploads = 0
+    // In arrival order. Splice is fine: `arrived` holds a handful of entries.
+    for (let i = 0; i < this.arrived.length; ) {
+      const entry = this.arrived[i]
+      if (!entry.job.urgent) {
+        if (uploads >= MAX_UPLOADS_PER_FRAME) {
+          i++
+          continue
+        }
+        uploads++
+      }
+      this.arrived.splice(i, 1)
       this.buildMs += (entry.result.buildMs - this.buildMs) * BUILD_MS_SMOOTHING
       entry.job.onReady(entry.result)
     }
@@ -159,19 +174,23 @@ export class ChunkWorkerPool {
     this.arrived.push({ job, result })
   }
 
-  /** Nearest-first. A full scan of a queue this size is cheaper than maintaining order. */
+  /**
+   * Urgent first, then nearest-first. A full scan of a queue this size is cheaper
+   * than maintaining order.
+   */
   private takeNearest(playerAbs: Vector3): Job | undefined {
     const { queue } = this
     if (queue.length === 0) return undefined
 
     let best = 0
-    let bestDistance = queue[0].centreAbs.distanceToSquared(playerAbs)
     for (let i = 1; i < queue.length; i++) {
-      const distance = queue[i].centreAbs.distanceToSquared(playerAbs)
-      if (distance < bestDistance) {
-        bestDistance = distance
-        best = i
+      const job = queue[i]
+      const incumbent = queue[best]
+      if (job.urgent !== incumbent.urgent) {
+        if (job.urgent) best = i
+        continue
       }
+      if (job.centreAbs.distanceToSquared(playerAbs) < incumbent.centreAbs.distanceToSquared(playerAbs)) best = i
     }
     return swapPop(queue, best)
   }

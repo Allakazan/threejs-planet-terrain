@@ -164,6 +164,11 @@
     hashery "^1.5.1"
     keyv "^5.6.0"
 
+"@dimforge/rapier3d-compat@^0.21.0":
+  version "0.21.0"
+  resolved "https://registry.yarnpkg.com/@dimforge/rapier3d-compat/-/rapier3d-compat-0.21.0.tgz#5b2636e7fcf7360db7ad6d2caf44adc8a75cbfdc"
+  integrity sha512-tCl1HPGwOhn5aCQbgqWbOH+Nx/5fnr3IPAnzQuR7zIhC/raqi2yxC6LhvZqjdI2El5hQgY5RDAwDrAjAi2FdPA==
+
 "@dimforge/rapier3d-compat@~0.12.0":
   version "0.12.0"
   resolved "https://registry.yarnpkg.com/@dimforge/rapier3d-compat/-/rapier3d-compat-0.12.0.tgz#7b3365e1dfdc5cd957b45afe920b4ac06c7cd389"

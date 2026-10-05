@@ -97,6 +97,7 @@ export function stepShip(ship: PlayerState, input: ShipInput, planet: Gravitatin
   const atmo = atmosphereFactor(altitude)
   ship.altitude = altitude
   ship.atmo = atmo
+  ship.crashTimer = Math.max(0, ship.crashTimer - dt)
 
   fwd.copy(FORWARD).applyQuaternion(ship.quaternion)
   stepHyperdrive(ship, input, planet, altitude, dt)

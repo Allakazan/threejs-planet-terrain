@@ -64,8 +64,36 @@ export class PlayerState {
     blocked: 0,
   }
 
+  /**
+   * Impact push-away, m/s, separate from `velocity` so it decays and its travel is
+   * capped (`KNOCKBACK_DISTANCE`). Applied by `applyKnockback`.
+   */
+  readonly knockback = new Vector3()
+  /** seconds left on the HUD's crash message; 0 = none */
+  crashTimer = 0
+  /** Normal speed of the impact that caused the last crash, m/s. */
+  crashSpeed = 0
+
   /** Lags `quaternion`; the chase camera's orientation. */
   readonly cameraQuat = new Quaternion().copy(this.quaternion)
+
+  /** Back to the start, instantly: a crash. The origin and the collision patch follow by themselves. */
+  respawn(): void {
+    this.absPosition.set(...START_ABS_POSITION)
+    this.quaternion.setFromAxisAngle(UP, START_YAW)
+    this.cameraQuat.copy(this.quaternion)
+    this.velocity.set(0, 0, 0)
+    this.knockback.set(0, 0, 0)
+    this.angularVelocity.set(0, 0, 0)
+    this.reticle.x = 0
+    this.reticle.y = 0
+    this.bank = 0
+    this.throttle = 0
+    this.thrust = ThrustMode.Coast
+    this.hyper.state = HyperState.Idle
+    this.hyper.charge = 0
+    this.hyper.blocked = 0
+  }
 
   /** Hands over to the flycam exactly where the chase camera is, so nothing jumps. */
   enterFlycam(): void {
@@ -84,6 +112,7 @@ export class PlayerState {
     offset.set(...CHASE_OFFSET).applyQuaternion(this.cameraQuat)
     this.absPosition.sub(offset)
     this.velocity.set(0, 0, 0)
+    this.knockback.set(0, 0, 0)
     this.angularVelocity.set(0, 0, 0)
     this.reticle.x = 0
     this.reticle.y = 0

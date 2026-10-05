@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { HUD_INTERVAL_MS, MAX_LOD_LEVEL, REBASE_THRESHOLD } from '../core/constants'
 import { useOrigin } from '../core/originContext'
+import { isCollisionWireEnabled } from '../debug/debugToggles'
+import { collisionStats } from '../physics/collisionStats'
 import { isGridEnabled } from '../planet/chunkMaterial'
 import { planetStats } from '../planet/planetStats'
 import { ControlMode, HyperState, playerState } from '../player/PlayerState'
@@ -33,6 +35,8 @@ type Snapshot = {
   atmo: number
   hyper: string
   hyperCharge: number
+  collision: typeof collisionStats
+  wire: boolean
 }
 
 function metres(v: number): string {
@@ -99,6 +103,8 @@ export function DebugHud() {
         atmo: playerState.atmo,
         hyper: playerState.hyper.state,
         hyperCharge: playerState.hyper.charge,
+        collision: { ...collisionStats },
+        wire: isCollisionWireEnabled(),
       })
     }, HUD_INTERVAL_MS)
 
@@ -110,6 +116,7 @@ export function DebugHud() {
 
   if (!snap) return null
 
+  const col = snap.collision
   const overBudget = snap.camDistance > REBASE_THRESHOLD * 1.01
   const ship = snap.mode === ControlMode.Ship
   const controls = ship
@@ -136,12 +143,18 @@ lod      ${snap.deepest} / ${MAX_LOD_LEVEL}
 queue    ${snap.queued} waiting   ${snap.inFlight} building
 build    ${snap.buildMs.toFixed(1)} ms/chunk
 geom     ${snap.poolCreated} made   ${snap.poolFree} free
-grid     ${snap.grid ? 'on' : 'off'}  (G)   terrain panel (T)`}
+grid     ${snap.grid ? 'on' : 'off'}  (G)   terrain panel (T)
+
+collide  ${col.activePlanets > 0 ? `${col.enabled} on  ${col.ready}/${col.tiles} built  lod ${col.deepest}` : 'off (above atmosphere)'}
+wire     ${snap.wire ? 'on' : 'off'}  (C)
+hits     ${col.impacts}  last ${col.lastImpactSpeed.toFixed(1)} m/s  stagger ${col.lastStaggerRate.toFixed(2)} rad/s
+crashes  ${col.crashes}  last ${col.lastCrashSpeed.toFixed(0)} m/s
+guard    ${col.guardPushes}  last ${col.lastGuardDepth.toFixed(2)} m`}
       </pre>
       {!snap.locked && (
         <div style={hint}>
           {ship
-            ? 'click to fly — mouse steer · W impulse · Shift cruise · S brake · A/D roll · hold Space: hyperdrive · V flycam · G grid · T terrain'
+            ? 'click to fly — mouse steer · W impulse · Shift cruise · S brake · A/D roll · hold Space: hyperdrive · V flycam · G grid · T terrain · C collision'
             : 'click to fly — WASD · Space/Ctrl · mouse look · Q/E roll · wheel: gear · V ship · G grid'}
         </div>
       )}
