@@ -6,6 +6,7 @@ import { MAX_FRAME_DELTA, PRIORITY_PLAYER } from '../core/constants'
 import { useOrigin } from '../core/originContext'
 import { collisionPatches } from '../physics/collisionPatches'
 import { groundGuard, resolveShipCollision } from '../physics/shipCollision'
+import { applyKnockback } from '../physics/shipImpact'
 import type { PlanetConfig } from '../planet/PlanetConfig'
 import { updateChaseCamera } from './chaseCamera'
 import { stepFlycam } from './flycam'
@@ -95,6 +96,7 @@ export function Player({ planet }: Props) {
     collisionPatches.update(planets, player.absPosition, player.velocity)
     stepShip(player, input, planet, dt)
     if (player.hyper.state !== HyperState.Engaged) {
+      applyKnockback(player, dt)
       resolveShipCollision(player, prevAbs, planet, origin.origin)
       groundGuard(player, planet)
     }

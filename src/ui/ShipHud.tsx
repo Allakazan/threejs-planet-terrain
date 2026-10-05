@@ -47,6 +47,8 @@ export function ShipHud() {
       } else if (hyper.state === HyperState.Engaged) {
         text = 'HYPERDRIVE ENGAGED — space to drop out'
         progress = 1
+      } else if (playerState.crashTimer > 0) {
+        text = `HULL BREACH — ${Math.round(playerState.crashSpeed)} m/s impact — respawned`
       } else if (hyper.blocked > 0) {
         text = 'HYPERDRIVE UNAVAILABLE — path blocked by planet'
       }

@@ -147,7 +147,8 @@ grid     ${snap.grid ? 'on' : 'off'}  (G)   terrain panel (T)
 
 collide  ${col.activePlanets > 0 ? `${col.enabled} on  ${col.ready}/${col.tiles} built  lod ${col.deepest}` : 'off (above atmosphere)'}
 wire     ${snap.wire ? 'on' : 'off'}  (C)
-hits     ${col.impacts}  last ${col.lastImpactSpeed.toFixed(1)} m/s
+hits     ${col.impacts}  last ${col.lastImpactSpeed.toFixed(1)} m/s  stagger ${col.lastStaggerRate.toFixed(2)} rad/s
+crashes  ${col.crashes}  last ${col.lastCrashSpeed.toFixed(0)} m/s
 guard    ${col.guardPushes}  last ${col.lastGuardDepth.toFixed(2)} m`}
       </pre>
       {!snap.locked && (

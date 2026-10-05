@@ -2,10 +2,7 @@ import RAPIER from '@dimforge/rapier3d-compat'
 import type { Cuboid } from '@dimforge/rapier3d-compat'
 import { Vector3 } from 'three'
 import {
-  COLLISION_FRICTION,
   COLLISION_MAX_LEVEL,
-  COLLISION_MIN_BOUNCE,
-  COLLISION_RESTITUTION,
   COLLISION_SKIN,
   GROUND_CLEARANCE,
   GROUND_GUARD_DEPTH,
@@ -16,6 +13,7 @@ import type { PlanetConfig } from '../planet/PlanetConfig'
 import type { PlayerState } from '../player/PlayerState'
 import { collisionStats } from './collisionStats'
 import { physicsWorld } from './physicsWorld'
+import { applyImpact } from './shipImpact'
 
 const [HX, HY, HZ] = SHIP_HALF_EXTENTS
 /** Centre to corner of the box, plus the offset: nothing of the ship is farther out. */
@@ -27,7 +25,6 @@ const shapePos = new Vector3()
 const step = new Vector3()
 const normal = new Vector3()
 const toShip = new Vector3()
-const tangent = new Vector3()
 const up = new Vector3()
 const boxCentre = new Vector3()
 const corner = new Vector3()
@@ -38,8 +35,9 @@ let shipShape: Cuboid | null = null
 
 /**
  * Sweeps the ship's box over this frame's step (`prevAbs → ship.absPosition`)
- * against the collision tiles, and on a hit stops it at the surface and bounces
- * it. A query, not a body: the flight model stays plain maths and runs first.
+ * against the collision tiles, and on a hit stops it at the surface and hands the
+ * normal to `applyImpact` (knockback, stagger, crash). A query, not a body: the
+ * flight model stays plain maths and runs first.
  *
  * `origin` is the render-space origin the colliders are currently placed in.
  */
@@ -73,29 +71,7 @@ export function resolveShipCollision(ship: PlayerState, prevAbs: Vector3, planet
   if (normal.lengthSq() < 0.5) normal.copy(ship.absPosition).sub(planet.centreAbs).normalize()
   else if (normal.dot(toShip) < 0) normal.negate()
 
-  bounce(ship.velocity, normal)
-}
-
-/**
- * Restitution on the normal part, Coulomb friction on the tangential part (the
- * loss scales with the normal impulse, so a graze barely slows the ship), and a
- * minimum separation speed so nothing sticks.
- */
-function bounce(velocity: Vector3, n: Vector3): void {
-  const vn = velocity.dot(n)
-  if (vn < 0) {
-    const impulse = -(1 + COLLISION_RESTITUTION) * vn
-    velocity.addScaledVector(n, impulse)
-
-    tangent.copy(velocity).addScaledVector(n, -velocity.dot(n))
-    const vt = tangent.length()
-    if (vt > 0) velocity.addScaledVector(tangent, -Math.min(vt, COLLISION_FRICTION * impulse) / vt)
-
-    collisionStats.impacts++
-    collisionStats.lastImpactSpeed = -vn
-  }
-  const away = velocity.dot(n)
-  if (away < COLLISION_MIN_BOUNCE) velocity.addScaledVector(n, COLLISION_MIN_BOUNCE - away)
+  applyImpact(ship, normal)
 }
 
 /**

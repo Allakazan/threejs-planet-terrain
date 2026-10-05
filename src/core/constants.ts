@@ -186,7 +186,7 @@ export const COLLISION_PATH_RADIUS = 25
 export const COLLISION_KEEP_FACTOR = 1.5
 /** Slack above `maxElevation` before the capsule counts as near the terrain, metres. */
 export const COLLISION_MARGIN = 200
-/** Fraction of the into-ground speed given back on impact. */
+/** Fraction of the into-ground speed given back as knockback, before the cap. */
 export const COLLISION_RESTITUTION = 0.4
 /** Coulomb-style: tangential speed lost per unit of normal impulse. */
 export const COLLISION_FRICTION = 0.3
@@ -194,6 +194,26 @@ export const COLLISION_FRICTION = 0.3
 export const COLLISION_MIN_BOUNCE = 3
 /** Distance the swept ship stops short of the surface, metres. */
 export const COLLISION_SKIN = 0.05
+
+// Impact response. Everything is keyed on the impact *normal* speed |v·n|, so a
+// fast graze survives and a slow head-on hit still staggers.
+
+/** Farthest an impact pushes the ship away, metres. Speed cap = distance · decay. */
+export const KNOCKBACK_DISTANCE = 3
+/** 1/s — the knockback decays at this rate; total travel is speed / decay. */
+export const KNOCKBACK_DECAY = 6
+/** m/s of normal speed below which an impact doesn't rotate the ship. */
+export const STAGGER_MIN_SPEED = 5
+/** m/s of normal speed at which the stagger reaches full strength: the impulse cap near the ground. */
+export const STAGGER_FULL_SPEED = 150
+/** rad/s of angular kick at full strength, for a strike at the nose or a wingtip. */
+export const STAGGER_MAX_RATE = 3
+/** Visual-only bank kick per rad/s of stagger, radians. */
+export const STAGGER_BANK = 0.25
+/** m/s of normal speed that destroys the ship; it respawns at the start. */
+export const CRASH_SPEED = 1500
+/** seconds the crash message stays on the HUD */
+export const CRASH_MESSAGE_TIME = 3
 
 /** The ground guard only acts this far below the surface, so it never fights the tiles. */
 export const GROUND_GUARD_DEPTH = 1

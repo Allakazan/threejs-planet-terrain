@@ -56,6 +56,31 @@ frame's displacement in; time of impact and normal out. It needs no rigid body.
 - The normal is flipped toward the ship when needed. With no normal (the cast started in penetration), local up is
   used.
 
+### 2b. Impact response (`shipImpact.ts`)
+
+Everything is keyed on the impact **normal speed** `|v·n|`. There is no mass in the model, so this is the honest
+"force". A fast graze survives; a slow head-on hit still staggers.
+
+- **Crash:** above `CRASH_SPEED` (400 m/s), `PlayerState.respawn()` puts the ship back at `START_ABS_POSITION`
+  instantly. `ShipHud` shows `HULL BREACH` for `CRASH_MESSAGE_TIME`. The origin rebases, the patch empties above
+  the atmosphere and the guard returns early, all by themselves.
+- **Knockback:**
+  - The into-ground part of the flight velocity is removed, so the ship slides on. Coulomb friction takes some of
+    the tangential part.
+  - The bounce goes into `ship.knockback`, a separate vector that decays at `KNOCKBACK_DECAY`. Its speed is capped
+    at `KNOCKBACK_DISTANCE · KNOCKBACK_DECAY`, so it travels at most `KNOCKBACK_DISTANCE` (3 m).
+  - `applyKnockback` runs between `stepShip` and the sweep, so the push is swept too.
+  - It is separate because the flight model never damps a velocity component along the nose. A bounce written into
+    `velocity` would carry on for kilometres.
+- **Stagger:** above `STAGGER_MIN_SPEED`, an angular kick along `I⁻¹ (r × n)` in the ship's frame.
+  - `r` is the box's support point: the mean of the corners deepest against the surface. Rapier's witness point can
+    be any corner of a face contact, which would spin a flat landing.
+  - The size ramps to `STAGGER_MAX_RATE` at `STAGGER_FULL_SPEED` (the impulse cap), scaled by the lever.
+  - `steer()` eases it back toward the reticle and auto-level pulls the roll back, so the ship wobbles and
+    recovers.
+  - Headless results: a 45° nose-first dive at 100 m/s pitched up at 0.6 rad/s; a wingtip strike was mostly roll; a
+    flat landing produced 0.01 rad/s; a 10 m/s touch produced none.
+
 ### 3. Resolution from distance, coverage from speed
 
 - **Region:** a capsule from `ship` to `ship + v · COLLISION_LOOKAHEAD`, radius `COLLISION_PATH_RADIUS`. It counts
@@ -106,9 +131,10 @@ tolerance keeps it from fighting the tiles, whose triangles sit slightly off the
 1. `prevAbs = absPosition`
 2. `collisionPatches.update`: plan and show; enabled colliders are flushed by the next step
 3. `stepShip`
-4. `resolveShipCollision`: `world.step()` to flush changes, then `castShape`
-5. `groundGuard`
-6. `origin.update`: a rebase re-places colliders, flushed by the next frame's step
+4. `applyKnockback`
+5. `resolveShipCollision`: `world.step()` to flush changes, then `castShape`, then `applyImpact`
+6. `groundGuard`
+7. `origin.update`: a rebase re-places colliders, flushed by the next frame's step
 
 The planet (-10) then pumps the pool, which delivers tiles; they are created disabled.
 
@@ -120,7 +146,8 @@ The planet (-10) then pumps the pool, which delivers tiles; they are created dis
 | `src/physics/CollisionTile.ts` | one tile and its subtree: request, plan, show, deactivate |
 | `src/physics/CollisionPatch.ts` | per planet: capsule, root cells, the per-frame walk |
 | `src/physics/collisionPatches.ts` | which planets are active |
-| `src/physics/shipCollision.ts` | `resolveShipCollision`, `bounce`, `groundGuard` |
+| `src/physics/shipCollision.ts` | `resolveShipCollision` (the sweep), `groundGuard` |
+| `src/physics/shipImpact.ts` | `applyImpact` (crash, knockback, stagger), `applyKnockback` |
 | `src/physics/collisionStats.ts` | HUD snapshot |
 | `src/planet/quadsphere.ts` | `sphereToFace` (Newton on the gnomonic projection of `faceToSphere`) |
 | `src/planet/ChunkWorkerPool.ts` | `urgent` jobs |
@@ -138,8 +165,8 @@ The planet (-10) then pumps the pool, which delivers tiles; they are created dis
 
 ## Open
 
-- **Bounce strength:** a 10 km/s dive bounces at ~3.6 km/s (restitution 0.4). Tuning, or crash damage, is a
-  gameplay call.
+- **Crash threshold vs terrain slope:** the normal speed includes the slope. A 2 km/s skim at 5° hit a slope at
+  ~1.2 km/s and crashed. Raise `CRASH_SPEED` if cruise over mountains feels unfair.
 - **Worker load:** the skim built ~430 tiles in 2 s headless. If workers can't keep up in the browser, raise
   `COLLISION_MIN_LEVEL`, shorten `COLLISION_LOOKAHEAD`, or drop tiles whose surface is far below the capsule (this
   needs per-tile min/max altitude).
