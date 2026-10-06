@@ -21,8 +21,7 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
   const result = buildChunk(message.req)
   // `self` is typed as a Window here because the app's lib is DOM; the cast picks
   // up `Worker.postMessage(message, transfer)`, which is the signature in play.
-  ;(self as unknown as Worker).postMessage(result, [
-    result.positions.buffer,
-    result.normals.buffer,
-  ])
+  const transfer: ArrayBuffer[] = [result.positions.buffer, result.normals.buffer]
+  if (result.bake !== null) transfer.push(result.bake.buffer)
+  ;(self as unknown as Worker).postMessage(result, transfer)
 }

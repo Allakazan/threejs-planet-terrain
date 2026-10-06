@@ -59,6 +59,8 @@ The design docs explain each system, with the reasoning behind it:
 
 - [ ] Skirts to hide cracks between LOD levels
 - [ ] Terrain collision and gravity
-- [ ] Atmosphere and terrain shading
+- [ ] Terrain triplanar shading
+- [ ] Baked horizon occlusion / Soft self-shadow
+- [ ] Atmosphere rim and scattering + atmospheric sky shader
 - [ ] Horizon culling and dynamic near/far planes
 - [ ] More planets

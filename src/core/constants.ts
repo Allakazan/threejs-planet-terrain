@@ -46,6 +46,86 @@ export const MAX_OCTAVES = 20
 
 export const SEED = 1337
 
+// --- terrain shading (see docs/06) ---
+
+/**
+ * Chunks at this level and finer get the near triplanar material; coarser ones get
+ * the far material with a per-chunk baked normal + cavity texture. The tuning dial
+ * for where the handover happens: at L11 it is a few km from the ground.
+ */
+export const TERRAIN_SHADER_MIN_LOD = 11
+
+/** Texels per edge of a far chunk's bake. 128 → ~6–17 ms per chunk on a worker. */
+export const FAR_TEX_RES = 128
+
+/**
+ * Texture coordinates are `renderPos + wrap(origin - planetCentre, TEX_PERIOD)`, the
+ * wrap done in f64. Every periodic thing the shader samples must have a period that
+ * divides this, or the wrap jumping shows as a seam. Powers of two throughout.
+ */
+export const TEX_PERIOD = 8192
+/** Metres per texture tile. */
+export const GROUND_TEX_SCALE = 4
+export const CLIFF_TEX_SCALE = 8
+/** The ground albedo once more at this scale, as a brightness modulation that kills tiling from altitude. */
+export const MACRO_TEX_SCALE = 128
+export const MACRO_STRENGTH = 0.6
+/** Size of the shared noise texture, texels. The stochastic lookups and breakup read it. */
+export const NOISE_TEX_SIZE = 256
+/** Metres per noise texel for the slope breakup. Period `NOISE_TEX_SIZE · this` must divide `TEX_PERIOD`. */
+export const BREAKUP_SCALE = 32
+/** How far the noise can push `slope` (which runs 0 flat → 1 vertical). */
+export const BREAKUP_STRENGTH = 0.12
+
+/** Slope (`1 - N·up`) where ground starts to give way to cliff, and where cliff is total. */
+export const SLOPE_CLIFF_START = 0.12
+export const SLOPE_CLIFF_END = 0.3
+
+/** Triplanar projection weights: `max(|N| - bias, 0)^sharpness`. Lower = softer cross-fade. */
+export const TRIPLANAR_SHARPNESS = 4
+export const TRIPLANAR_BIAS = 0.2
+/** Biplanar exponent on iq's continuity-corrected weights. 1 is iq's default. */
+export const BIPLANAR_SHARPNESS = 1
+/** 2 projections instead of 3. Pays for the stochastic taps. */
+export const USE_BIPLANAR = true
+/** iq's two-tap "texture repetition" fix. Each tap pair costs one noise lookup. */
+export const USE_STOCHASTIC_TILING = true
+/** Metres from the camera past which the stochastic blend hardens into a single tap. */
+export const STOCHASTIC_FADE_START = 150
+export const STOCHASTIC_FADE_END = 600
+
+/** Height-blend contact softness, in texture-height units. */
+export const HEIGHT_BLEND_DEPTH = 0.15
+/** How much the texture heights may override the slope weight. 0 = plain slope blend. */
+export const HEIGHT_BLEND_INFLUENCE = 0.5
+
+/**
+ * The handover, in units of `switchArc` — the edge length of a level
+ * `TERRAIN_SHADER_MIN_LOD - 1` chunk. Such a chunk splits at 2 of them and merges
+ * at 2.5 (centre distance), so near and far chunks can sit side by side for
+ * fragments anywhere in roughly **1.3–3.2 switchArc**. Both materials must look the
+ * same throughout that band, so:
+ *
+ * - the near material fades its textures to their average colours by `NEAR_FADE_END`;
+ * - the far material holds its cavity off, and its normals one mip coarser (the
+ *   detail of the child mesh), until `FAR_DETAIL_START`.
+ *
+ * Between the two, both draw "average colour + mesh-resolution normals".
+ */
+export const NEAR_FADE_START = 0.4
+export const NEAR_FADE_END = 1.2
+export const FAR_DETAIL_START = 3.2
+export const FAR_DETAIL_END = 4.5
+
+/** Box half-width for the cavity's unsharp mask, texels. Also the bake's ring width. */
+export const CAVITY_RADIUS = 4
+/** Gain on `(h - mean h) / texel`, before `tanh`. */
+export const CAVITY_GAIN = 1
+/** Albedo multiplier at full cavity. */
+export const CAVITY_DARKEN = 0.25
+/** Albedo multiplier at full ridge. */
+export const RIDGE_LIGHTEN = 1.15
+
 // --- origin ---
 
 /** Rebase once the player drifts this far from render-space zero. See docs/01. */
@@ -254,7 +334,7 @@ export const RENDER_ORDER_SHIP = 2
 export const HUD_INTERVAL_MS = 100
 
 /** Wireframe-style grid drawn inside the surface shader. Toggled with G. */
-export const SHOW_GRID = true
+export const SHOW_GRID = false
 /** Half-width of a cell line, in pixels. */
 export const GRID_LINE_WIDTH = 1.1
 /** Half-width of the chunk-boundary line, in pixels — the LOD tell. */

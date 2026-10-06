@@ -43,8 +43,8 @@ function App() {
         {/* Airless body: almost no fill light, one hard sun. A directional light's
             direction comes from its position, which is origin-independent, so this
             stays fixed however far the player rebases. */}
-        <ambientLight intensity={0.12} />
-        <directionalLight position={[0.55, 0.4, 1]} intensity={2.6} />
+        <ambientLight intensity={0.5} />
+        <directionalLight position={[0.55, 0.4, 1]} intensity={3.6} />
         <Player planet={moon} />
         <Planet config={moon} />
         <CollisionDebug planet={moon} />

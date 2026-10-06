@@ -1,4 +1,5 @@
 import { Vector3 } from 'three'
+import { bakeFarTexture } from './farBake'
 import { faceToSphere } from './quadsphere'
 import { layeredTerrain } from './terrain/LayeredTerrain'
 import type { TerrainSpec } from './terrain/terrainSpec'
@@ -24,6 +25,11 @@ export type ChunkRequest = {
   radius: number
   seed: number
   terrainVersion: number
+  /**
+   * Texels per edge of the far-material bake (`farBake.ts`); absent or 0 = none.
+   * Only render chunks coarser than `TERRAIN_SHADER_MIN_LOD` ask. Collision tiles never do.
+   */
+  bakeRes?: number
 }
 
 /**
@@ -55,6 +61,10 @@ export type ChunkResult = {
   boundingRadius: number
   /** Wall time of `buildChunk`, for the HUD — terrain cost is what dominates it. */
   buildMs: number
+  /** `bakeRes²` RGBA8: object-space normal + cavity. Null when no bake was asked for. */
+  bake: Uint8Array<ArrayBuffer> | null
+  /** Wall time of the bake alone, ms (included in `buildMs`). 0 without one. */
+  bakeMs: number
 }
 
 /**
@@ -186,6 +196,15 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
     }
   }
 
+  let bake: Uint8Array<ArrayBuffer> | null = null
+  let bakeMs = 0
+  const bakeRes = req.bakeRes ?? 0
+  if (bakeRes > 0) {
+    const bakeStarted = performance.now()
+    bake = bakeFarTexture(terrain, face, cu, cv, half, level, radius, res, bakeRes)
+    bakeMs = performance.now() - bakeStarted
+  }
+
   return {
     id: req.id,
     positions,
@@ -193,5 +212,7 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
     chunkOrigin: [ox, oy, oz],
     boundingRadius: Math.sqrt(maxRadiusSq),
     buildMs: performance.now() - started,
+    bake,
+    bakeMs,
   }
 }
