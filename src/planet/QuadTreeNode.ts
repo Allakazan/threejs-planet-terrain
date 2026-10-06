@@ -1,15 +1,18 @@
 import { Mesh, Vector3 } from 'three'
-import type { Group, Material } from 'three'
+import type { Group, Material, MeshStandardMaterial } from 'three'
 import {
   CHUNK_RESOLUTION,
+  FAR_TEX_RES,
   MAX_LOD_LEVEL,
   MERGE_HYSTERESIS,
   SPLIT_FACTOR,
+  TERRAIN_SHADER_MIN_LOD,
 } from '../core/constants'
 import type { ChunkResult } from './chunkGeometry'
 import type { ChunkWorkerPool } from './ChunkWorkerPool'
 import type { PlanetConfig } from './PlanetConfig'
 import { faceArc, faceToSphere } from './quadsphere'
+import { acquireFarMaterial, releaseFarMaterial } from './shading/farMaterialPool'
 import { acquireChunkGeometry, fillChunkGeometry, releaseChunkGeometry } from './sharedBuffers'
 
 /** `erasableSyntaxOnly` forbids `enum`, so: const object + derived union. */
@@ -31,6 +34,7 @@ export type NodeContext = {
   /** Render-space root; its position is owned by the floating origin. */
   readonly group: Group
   readonly pool: ChunkWorkerPool
+  /** The near material, shared by every chunk at `TERRAIN_SHADER_MIN_LOD` and finer. */
   readonly material: Material
   /** Live total, for the HUD. Nodes maintain it. */
   nodeCount: number
@@ -78,6 +82,8 @@ export class QuadTreeNode {
   private readonly ctx: NodeContext
   private readonly parent: QuadTreeNode | null
   private mesh: Mesh | null = null
+  /** Set on far chunks only: this node's own pooled material, holding its bake. */
+  private farMaterial: MeshStandardMaterial | null = null
   private children: QuadTreeNode[] | null = null
   private requestId = 0
 
@@ -106,6 +112,11 @@ export class QuadTreeNode {
     ctx.nodeCount++
   }
 
+  /** Coarser than `TERRAIN_SHADER_MIN_LOD`: drawn with a far material and its own bake. */
+  get isFar(): boolean {
+    return this.level < TERRAIN_SHADER_MIN_LOD
+  }
+
   /** Asks for this node's geometry. Separate from construction so the caller controls when. */
   request(): void {
     this.state = NodeState.Pending
@@ -120,6 +131,7 @@ export class QuadTreeNode {
         radius: this.ctx.config.radius,
         seed: this.ctx.config.seed,
         terrainVersion: this.ctx.config.terrainVersion,
+        bakeRes: this.isFar ? FAR_TEX_RES : 0,
       },
       this.centreAbs,
       (result) => {
@@ -195,7 +207,13 @@ export class QuadTreeNode {
     const geometry = acquireChunkGeometry()
     fillChunkGeometry(geometry, result.positions, result.normals, result.boundingRadius)
 
-    const mesh = new Mesh(geometry, this.ctx.material)
+    let material = this.ctx.material
+    if (result.bake !== null) {
+      this.farMaterial = acquireFarMaterial(result.bake)
+      material = this.farMaterial
+    }
+
+    const mesh = new Mesh(geometry, material)
     mesh.position.set(result.chunkOrigin[0], result.chunkOrigin[1], result.chunkOrigin[2])
     // A chunk never moves relative to the planet root, so its local matrix is
     // computed once. The root's rebase still propagates, because three multiplies
@@ -240,6 +258,10 @@ export class QuadTreeNode {
       this.ctx.group.remove(this.mesh)
       releaseChunkGeometry(this.mesh.geometry)
       this.mesh = null
+    }
+    if (this.farMaterial !== null) {
+      releaseFarMaterial(this.farMaterial)
+      this.farMaterial = null
     }
 
     this.state = NodeState.Idle

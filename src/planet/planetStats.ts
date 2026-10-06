@@ -7,8 +7,9 @@
  * acceptable for a debug readout.
  */
 export const planetStats = {
-  /** Visible leaf chunks. */
+  /** Visible leaf chunks, and how many of them draw with the far material. */
   leaves: 0,
+  farLeaves: 0,
   /** Every node alive, interior included. */
   nodes: 0,
   deepest: 0,
@@ -19,6 +20,11 @@ export const planetStats = {
   poolFree: 0,
   /** Moving average of one chunk's build time, ms. */
   buildMs: 0,
+  /** Same for the far-material bake alone, over the chunks that had one. */
+  bakeMs: 0,
+  /** Far materials (each with its texture) ever made, and how many are parked. */
+  farCreated: 0,
+  farFree: 0,
   /** Player height above the reference sphere, metres. Negative means underground. */
   altitude: 0,
 }

@@ -61,6 +61,8 @@ export class ChunkWorkerPool {
 
   /** Exponential moving average of chunk build time, ms. */
   buildMs = 0
+  /** Same, for the far-material bake alone, over the chunks that had one. */
+  bakeMs = 0
 
   constructor() {
     if (!USE_WORKERS) return
@@ -159,6 +161,7 @@ export class ChunkWorkerPool {
       }
       this.arrived.splice(i, 1)
       this.buildMs += (entry.result.buildMs - this.buildMs) * BUILD_MS_SMOOTHING
+      if (entry.result.bake !== null) this.bakeMs += (entry.result.bakeMs - this.bakeMs) * BUILD_MS_SMOOTHING
       entry.job.onReady(entry.result)
     }
   }

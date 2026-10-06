@@ -328,6 +328,8 @@ The fix, when picked up:
    one-shared-index-buffer design is untouched. Only the constant vertex count changes.
 3. The skirt is invisible from outside (it hangs down behind the surface) and plugs any gap up to its depth.
 4. Visible in the debug grid as a thin apron at chunk borders — acceptable.
+5. Skirt vertices **copy the edge vertex's normal and uv** (not a sideways normal), so the terrain shading of
+   [docs/06](06-terrain-shading.md) treats them as the surface edge above them.
 
 Scope: `chunkGeometry.ts`, `sharedBuffers.ts`, one constant. No change to the quadtree or worker protocol.
 Skirts need no neighbour lookups, so the reversed-parameter cube edges noted above stay irrelevant — but they will

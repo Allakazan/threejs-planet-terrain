@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { HUD_INTERVAL_MS, MAX_LOD_LEVEL, REBASE_THRESHOLD } from '../core/constants'
+import { HUD_INTERVAL_MS, MAX_LOD_LEVEL, REBASE_THRESHOLD, TERRAIN_SHADER_MIN_LOD } from '../core/constants'
 import { useOrigin } from '../core/originContext'
 import { isCollisionWireEnabled } from '../debug/debugToggles'
 import { collisionStats } from '../physics/collisionStats'
@@ -21,6 +21,7 @@ type Snapshot = {
   locked: boolean
   altitude: number
   leaves: number
+  farLeaves: number
   nodes: number
   deepest: number
   queued: number
@@ -28,6 +29,9 @@ type Snapshot = {
   poolCreated: number
   poolFree: number
   buildMs: number
+  bakeMs: number
+  farCreated: number
+  farFree: number
   grid: boolean
   mode: ControlMode
   thrust: string
@@ -89,6 +93,7 @@ export function DebugHud() {
         locked: document.pointerLockElement !== null,
         altitude: planetStats.altitude,
         leaves: planetStats.leaves,
+        farLeaves: planetStats.farLeaves,
         nodes: planetStats.nodes,
         deepest: planetStats.deepest,
         queued: planetStats.queued,
@@ -96,6 +101,9 @@ export function DebugHud() {
         poolCreated: planetStats.poolCreated,
         poolFree: planetStats.poolFree,
         buildMs: planetStats.buildMs,
+        bakeMs: planetStats.bakeMs,
+        farCreated: planetStats.farCreated,
+        farFree: planetStats.farFree,
         grid: isGridEnabled(),
         mode: playerState.mode,
         thrust: playerState.thrust,
@@ -139,10 +147,12 @@ rebases  ${snap.rebases}   bodies ${snap.bodies}
 fps      ${snap.fps.toFixed(0)}
 
 leaves   ${snap.leaves}   nodes ${snap.nodes}
+shading  ${snap.leaves - snap.farLeaves} near   ${snap.farLeaves} far   (near from L${TERRAIN_SHADER_MIN_LOD})
 lod      ${snap.deepest} / ${MAX_LOD_LEVEL}
 queue    ${snap.queued} waiting   ${snap.inFlight} building
-build    ${snap.buildMs.toFixed(1)} ms/chunk
+build    ${snap.buildMs.toFixed(1)} ms/chunk   bake ${snap.bakeMs.toFixed(1)} ms/far chunk
 geom     ${snap.poolCreated} made   ${snap.poolFree} free
+far mat  ${snap.farCreated} made   ${snap.farFree} free
 grid     ${snap.grid ? 'on' : 'off'}  (G)   terrain panel (T)
 
 collide  ${col.activePlanets > 0 ? `${col.enabled} on  ${col.ready}/${col.tiles} built  lod ${col.deepest}` : 'off (above atmosphere)'}

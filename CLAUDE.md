@@ -4,7 +4,7 @@ Procedural planet (R = 2,737 km, 1 unit = 1 m) with quadtree LOD terrain, flown 
 Vite + React 19 + TypeScript 6 + @react-three/fiber + three. Package manager: **yarn**.
 
 - `yarn dev` · `yarn build` (`tsc -b && vite build`) · `yarn lint`
-- Design docs, with rationale and verification notes: [docs/01-floating-origin-and-player.md](docs/01-floating-origin-and-player.md), [docs/02-quadsphere-lod-terrain.md](docs/02-quadsphere-lod-terrain.md), [docs/03-ship-controller.md](docs/03-ship-controller.md), [docs/04-layered-terrain.md](docs/04-layered-terrain.md), [docs/05-terrain-collision.md](docs/05-terrain-collision.md). Read them before changing core systems.
+- Design docs, with rationale and verification notes: [docs/01-floating-origin-and-player.md](docs/01-floating-origin-and-player.md), [docs/02-quadsphere-lod-terrain.md](docs/02-quadsphere-lod-terrain.md), [docs/03-ship-controller.md](docs/03-ship-controller.md), [docs/04-layered-terrain.md](docs/04-layered-terrain.md), [docs/05-terrain-collision.md](docs/05-terrain-collision.md), [docs/06-terrain-shading.md](docs/06-terrain-shading.md). Read them before changing core systems.
 
 ## What's built
 - **Floating origin** (`src/core`): render-space origin rebases onto the player so the camera stays near 0. Absolute positions are f64 `Vector3`s; anything placed in the world registers as a `WorldBody` (`useWorldBody`).
@@ -12,6 +12,7 @@ Vite + React 19 + TypeScript 6 + @react-three/fiber + three. Package manager: **
 - **Quad-sphere LOD terrain** (`src/planet`): 6 spherified-cube faces → quadtree (`QuadTreeNode`, `PlanetTree`), chunks built in a worker pool (`chunkGeometry.ts` is the pure builder), shared index/UV buffers and a geometry pool.
 - **Layered terrain** (`src/planet/terrain`): `LayeredTerrain` evaluates a `TerrainSpec`, which is plain data: ordered layers with their own basis (simplex/ridged/billow/Worley F1·F2·F2-F1/crater/constant), wavelength, amplitude in metres, warp, and masks on earlier layers. Every octave is Nyquist-weighted per LOD. There are 12 presets in `presets.ts` (rocky is the default; the full list is in docs/04). `terrainStore` holds the live spec plus a version; Apply bumps the version and the planet rebuilds.
 - **Terrain collision** (`src/physics`): a Rapier world (`@dimforge/rapier3d-compat`, f32, render space, rebased) holds trimesh **collision tiles**, built by `buildChunk` but independent of the render tree. Per planet, while inside its atmosphere, a sparse `CollisionTile` tree covers the ground under the swept path `ship → ship + v·lookahead`. Detail comes from distance to the ship; speed only stretches the path. The ship is not a body: `resolveShipCollision` runs `castShape` over the frame's step, then `applyImpact` (`shipImpact.ts`) responds by impact normal speed. It applies a decaying knockback capped at a few metres (`ship.knockback`, kept separate from `velocity`) and a stagger, an angular kick from the contact point. Above `CRASH_SPEED` it calls `respawn()` at the start. `groundGuard` lifts the ship out of the terrain function when it is buried, for example after a terrain Apply.
+- **Terrain shading** (`src/planet/shading`, docs/06): chunks at `TERRAIN_SHADER_MIN_LOD` and finer use the shared **near** material (`chunkMaterial.ts`). It does biplanar/triplanar grass and rock picked by slope against the local up, with height blending, stochastic tiling, macro variation and a fade to average colour. Coarser chunks each get a pooled **far** material holding a worker-baked texture (`farBake.ts`: object-space normal + cavity). Both share `terrainCliffWeight`, so the handover matches.
 - **Debug**: in-shader grid + chunk borders (toggle **G**), terrain panel (toggle **T**), collision tile wireframe (toggle **C**), `DebugHud` overlay (including build ms/chunk). `MarkerRig` is unmounted origin test scaffolding.
 
 ## Rules that aren't obvious
@@ -24,6 +25,7 @@ Vite + React 19 + TypeScript 6 + @react-three/fiber + three. Package manager: **
 - A parent node stays visible until all 4 children are Ready; interior nodes keep their geometry.
 - Terrain must be deterministic and allocation-free. Workers rebuild it from `seed`+`radius`+`terrainVersion` via `layeredTerrain()`. The pool posts a version's spec to each worker before the first request that names it. Never mutate a registered spec: `setTerrainSpec` clones.
 - Every noise basis must be continuous. The vendored simplex uses kernel r² = 0.5 because 0.6 steps at simplex boundaries. A new basis needs zero output when "no octaves" are used, or skipped layers shift the surface (docs/04).
+- **Terrain texture coordinates** are `renderPos + uTexOffset`, wrapped in f64 by `TEX_PERIOD`. Every sampled period (tile scales, noise) must divide `TEX_PERIOD`, or each rebase shows a seam. Sample with `textureGrad`, using derivatives taken in uniform control flow.
 - `TerrainSource` is a heightfield, so caves need a density interface (voxel research in docs/04, not built).
 - All tuning constants live in `src/core/constants.ts`, except the terrain layer stack, which is data in `presets.ts`. `USE_WORKERS = false` runs generation synchronously for debugging.
 
@@ -31,4 +33,4 @@ Vite + React 19 + TypeScript 6 + @react-three/fiber + three. Package manager: **
 - Cracks between LOD levels are expected (skirt fix scoped in docs/02 Stage 2).
 - `MAX_LOD_LEVEL` is 20. Plan 2 visuals, the Plan 3 ship feel, and the docs/04 presets and terrain panel have not been verified in a browser yet.
 - Terrain collision (docs/05) has not been verified in a browser. There is no gravity and no walker yet: the walker will use Rapier's `KinematicCharacterController` against the same tiles.
-- Not done: dynamic near/far, horizon culling, atmosphere/terrain shading, second planet.
+- Not done: dynamic near/far, horizon culling, atmosphere shading, second planet (the terrain materials are singletons, so they need per-planet uniforms first).

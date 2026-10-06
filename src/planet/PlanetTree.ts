@@ -14,8 +14,9 @@ import type { NodeContext } from './QuadTreeNode'
  * `dispose` + rebuild rather than a duplicated scene.
  */
 export class PlanetTree {
-  /** Visible leaves this frame, and the deepest level among them. */
+  /** Visible leaves this frame, how many draw with the far material, and the deepest level among them. */
   leaves = 0
+  farLeaves = 0
   deepest = 0
 
   private readonly ctx: NodeContext
@@ -33,6 +34,7 @@ export class PlanetTree {
 
   update(playerAbs: Vector3): void {
     this.leaves = 0
+    this.farLeaves = 0
     this.deepest = 0
     for (const root of this.roots) root.update(playerAbs, this.visit)
 
@@ -46,6 +48,7 @@ export class PlanetTree {
 
   private readonly visit = (node: QuadTreeNode) => {
     this.leaves++
+    if (node.isFar) this.farLeaves++
     if (node.level > this.deepest) this.deepest = node.level
   }
 
