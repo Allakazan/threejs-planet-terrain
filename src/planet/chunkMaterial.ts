@@ -1,6 +1,8 @@
 import { MeshStandardMaterial } from 'three'
 import type { WebGLProgramParametersWithUniforms } from 'three'
 import { USE_BIPLANAR, USE_STOCHASTIC_TILING } from '../core/constants'
+import { ATMOSPHERE_PARS, TERRAIN_ATMOSPHERE_BODY } from './atmosphere/atmosphere.glsl'
+import { atmosphereUniforms } from './atmosphere/atmosphereUniforms'
 import { shadingUniforms } from './shading/shadingUniforms'
 import {
   GRID_BODY,
@@ -17,8 +19,11 @@ import './shading/terrainTextures'
 
 /**
  * Splices the terrain GLSL shared by the near and far materials into a standard
- * shader: the varyings, the shared pars, the grid. Each material adds its own
- * colour and normal stages around it.
+ * shader: the varyings, the shared pars, the grid, and the aerial perspective.
+ * Each material adds its own colour and normal stages around it.
+ *
+ * The atmosphere goes in here, for both, because near and far chunks border each
+ * other kilometres out: haze on one side only would be a seam (docs/07).
  *
  * Patching a built-in material through `onBeforeCompile` — rather than writing a
  * `ShaderMaterial` — is what keeps three's `logdepthbuf_*` chunks in the program.
@@ -29,15 +34,20 @@ export function patchTerrainShader(
   fragmentPars: string,
   colourBody: string,
 ): void {
-  Object.assign(shader.uniforms, shadingUniforms)
+  Object.assign(shader.uniforms, shadingUniforms, atmosphereUniforms)
   shader.vertexShader = shader.vertexShader
     .replace('#include <common>', `#include <common>\n${TERRAIN_VERTEX_PARS}`)
     .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>\n${TERRAIN_VERTEX_BODY}`)
   shader.fragmentShader = shader.fragmentShader
-    .replace('#include <uv_pars_fragment>', `#include <uv_pars_fragment>\n${GRID_PARS}\n${TERRAIN_PARS}\n${fragmentPars}`)
+    .replace(
+      '#include <uv_pars_fragment>',
+      `#include <uv_pars_fragment>\n${GRID_PARS}\n${TERRAIN_PARS}\n${ATMOSPHERE_PARS}\n${fragmentPars}`,
+    )
     // After <color_fragment>, the last chunk to touch diffuseColor; the grid goes
     // on top of the terrain colour.
     .replace('#include <color_fragment>', `#include <color_fragment>\n${colourBody}\n${GRID_BODY}`)
+    // The lit colour, seen through the air — before tone mapping.
+    .replace('#include <opaque_fragment>', `${TERRAIN_ATMOSPHERE_BODY}\n#include <opaque_fragment>`)
 }
 
 /**

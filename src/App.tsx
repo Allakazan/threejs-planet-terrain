@@ -2,7 +2,7 @@ import { Canvas } from '@react-three/fiber'
 import { useMemo } from 'react'
 import { Vector3 } from 'three'
 import { AdaptiveFov } from './AdaptiveFov'
-import { CAMERA_FAR, CAMERA_FOV, CAMERA_NEAR } from './core/constants'
+import { CAMERA_FAR, CAMERA_FOV, CAMERA_NEAR, SUN_DIRECTION, SUN_INTENSITY } from './core/constants'
 import { OriginContext, floatingOrigin } from './core/originContext'
 import { CollisionDebug } from './debug/CollisionDebug'
 import { useDebugKeys } from './debug/useDebugKeys'
@@ -39,12 +39,13 @@ function App() {
         camera={{ fov: CAMERA_FOV, near: CAMERA_NEAR, far: CAMERA_FAR }}
         dpr={[1, 2]}
       >
+        <color attach="background" args={['#000000']} />
         <AdaptiveFov fov={CAMERA_FOV} />
-        {/* Airless body: almost no fill light, one hard sun. A directional light's
-            direction comes from its position, which is origin-independent, so this
-            stays fixed however far the player rebases. */}
-        <ambientLight intensity={0.5} />
-        <directionalLight position={[0.55, 0.4, 1]} intensity={3.6} />
+        {/* Almost no fill light, one hard sun. A directional light's direction comes
+            from its position, which is origin-independent, so this stays fixed however
+            far the player rebases. The atmosphere scatters from the same direction. */}
+        <ambientLight intensity={0.15} />
+        <directionalLight position={SUN_DIRECTION} intensity={SUN_INTENSITY} />
         <Player planet={moon} />
         <Planet config={moon} />
         <CollisionDebug planet={moon} />

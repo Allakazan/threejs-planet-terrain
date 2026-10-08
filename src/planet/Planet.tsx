@@ -1,10 +1,13 @@
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
+import { Vector3 } from 'three'
 import type { Group } from 'three'
 import { PRIORITY_PLANET } from '../core/constants'
 import { useOrigin } from '../core/originContext'
 import { useWorldBody } from '../core/useWorldBody'
 import { playerState } from '../player/PlayerState'
+import { updateAtmosphereFrame } from './atmosphere/atmosphereUniforms'
+import { SkyShell } from './atmosphere/SkyShell'
 import { chunkMaterial } from './chunkMaterial'
 import { chunkWorkerPool } from './ChunkWorkerPool'
 import type { PlanetConfig } from './PlanetConfig'
@@ -13,6 +16,8 @@ import { PlanetTree } from './PlanetTree'
 import { farMaterialStats } from './shading/farMaterialPool'
 import { updateShadingFrame } from './shading/shadingUniforms'
 import { geometryPoolStats } from './sharedBuffers'
+
+const cameraAbs = new Vector3()
 
 type Props = {
   /** Must be referentially stable — see `planetConfig`. */
@@ -32,6 +37,7 @@ type Props = {
  */
 export function Planet({ config }: Props) {
   const origin = useOrigin()
+  const camera = useThree((s) => s.camera)
   const ref = useWorldBody<Group>(config.centreAbs)
   const tree = useRef<PlanetTree | null>(null)
 
@@ -57,6 +63,8 @@ export function Planet({ config }: Props) {
     // The terrain materials are shared module singletons, so with a second planet
     // the last one to run wins. They need a uniform set per planet by then.
     updateShadingFrame(group.position, origin.origin, config.centreAbs, config.radius)
+    // The camera was placed by the Player this frame, after its rebase.
+    updateAtmosphereFrame(origin.toAbsolute(camera.position, cameraAbs), config.centreAbs, config.radius)
 
     const playerAbs = playerState.absPosition
     current.update(playerAbs)
@@ -78,5 +86,9 @@ export function Planet({ config }: Props) {
     planetStats.altitude = playerAbs.distanceTo(config.centreAbs) - config.radius
   }, PRIORITY_PLANET)
 
-  return <group ref={ref} />
+  return (
+    <group ref={ref}>
+      <SkyShell radius={config.radius} />
+    </group>
+  )
 }
