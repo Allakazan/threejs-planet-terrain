@@ -39,7 +39,7 @@ export const USE_WORKERS = true
 // with the terrain panel (T). See docs/04.
 
 /** Key into `TERRAIN_PRESETS`. */
-export const DEFAULT_TERRAIN_PRESET = 'rocky'
+export const DEFAULT_TERRAIN_PRESET = 'earthlike'
 
 /** Per-layer octave cap the terrain panel allows. The Nyquist rule rarely reaches it. */
 export const MAX_OCTAVES = 20
@@ -220,6 +220,58 @@ export const ATMO_DRAG_LINEAR = 0.5
 export const ATMO_DRAG_QUAD = 1e-4
 /** 1/s at full density — an unpowered ship slows down in air. */
 export const ATMO_COAST_DRAG = 0.15
+
+// --- atmosphere shading (see docs/07) ---
+// The shell's height and the Rayleigh scale height are the flight model's
+// `ATMOSPHERE_HEIGHT` / `ATMOSPHERE_SCALE_HEIGHT`, so what you see is what drags.
+
+/**
+ * Towards the sun, world space (normalised where used). The directional light and
+ * the scattering both read it. A directional light's direction is origin-independent.
+ */
+export const SUN_DIRECTION: readonly [number, number, number] = [0.55, 0.4, 1]
+/** The directional light's intensity: the sun's irradiance as the terrain sees it. */
+export const SUN_INTENSITY = 2.6
+
+/**
+ * Earth's sea-level scattering coefficients, 1/m, scaled by Earth's scale height over
+ * ours: optical depth is β·H, so this keeps Earth's column — and its blue — with a
+ * 30 km scale height instead of 8 km.
+ */
+const RAYLEIGH_EARTH_SCALE = 8_000 / ATMOSPHERE_SCALE_HEIGHT
+/**
+ * Air density relative to Earth's (1 = Earth's column). The zenith's brightness and
+ * depth of blue: overhead the air is optically thin, so more air means a brighter
+ * zenith, while the horizon is already saturated and barely changes. From space it
+ * also thickens the haze over the disk; `ATMO_SPACE_HAZE` offsets that.
+ */
+export const ATMO_RAYLEIGH_DENSITY = 1
+export const ATMO_RAYLEIGH_BETA: readonly [number, number, number] = [
+  5.8e-6 * RAYLEIGH_EARTH_SCALE * ATMO_RAYLEIGH_DENSITY,
+  13.5e-6 * RAYLEIGH_EARTH_SCALE * ATMO_RAYLEIGH_DENSITY,
+  33.1e-6 * RAYLEIGH_EARTH_SCALE * ATMO_RAYLEIGH_DENSITY,
+]
+/** e-folding height of the haze (Mie). Earth's is 1.2 km; scaled up with the air. */
+export const ATMO_MIE_SCALE_HEIGHT = 6_500
+/** Mie scattering, 1/m: Earth's 21e-6 × 1.2 km / `ATMO_MIE_SCALE_HEIGHT`. Extinction is β / 0.9. */
+export const ATMO_MIE_BETA = 21e-6 * (1_200 / ATMO_MIE_SCALE_HEIGHT)
+/** Henyey-Greenstein asymmetry: how strongly the haze glows around the sun. */
+export const ATMO_MIE_G = 0.76
+/**
+ * The sun as the scattering sees it. Physically it equals `SUN_INTENSITY`; that reads
+ * as a grey sky over this dim ground, so the air gets a little more. Much past 2×
+ * the haze buries the terrain from orbit (20 turned the disk milky).
+ */
+export const ATMO_SUN_INTENSITY = SUN_INTENSITY * 2
+/**
+ * Strength of the haze over the terrain seen **from space, looking down**, 0..1
+ * (1 = physical). Looking straight down crosses the same column of air as looking
+ * straight up from the ground, so physically the disk's haze is as bright as the
+ * zenith; this decouples them. It fades in over the atmosphere's height as the
+ * camera climbs, and back out towards the limb, which keeps full haze so the
+ * terrain's edge meets the sky shell's rim without a step.
+ */
+export const ATMO_SPACE_HAZE = 0.4
 
 // --- ship: hyperdrive ---
 
