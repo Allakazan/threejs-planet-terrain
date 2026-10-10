@@ -1,5 +1,6 @@
 import type { Vector3 } from 'three'
-import { ATMOSPHERE_HEIGHT } from '../core/constants'
+import { COLLISION_ACTIVATION_MARGIN } from '../core/constants'
+import { atmosphereState } from '../planet/atmosphere/atmosphereSettings'
 import { chunkWorkerPool } from '../planet/ChunkWorkerPool'
 import type { PlanetConfig } from '../planet/PlanetConfig'
 import { CollisionPatch } from './CollisionPatch'
@@ -14,7 +15,11 @@ const stats: TileStats = { tiles: 0, ready: 0, enabled: 0, deepest: 0 }
  * its identity across terrain versions (a new version swaps the config and
  * rebuilds the tiles).
  *
- * `ATMOSPHERE_HEIGHT` is global while there is one planet. With a second one it
+ * The atmosphere is live-tunable and may be thinner than the mountains are tall,
+ * so the patch is active up to whichever is higher: the atmosphere, or the
+ * terrain's `maxElevation` plus `COLLISION_ACTIVATION_MARGIN`.
+ *
+ * `atmosphereState` is global while there is one planet. With a second one it
  * moves into `PlanetConfig`; nothing here changes but the read.
  */
 class CollisionPatches {
@@ -25,7 +30,8 @@ class CollisionPatches {
       const altitude = shipAbs.distanceTo(planet.centreAbs) - planet.radius
       let patch = this.patches.get(planet.centreAbs)
 
-      if (altitude >= ATMOSPHERE_HEIGHT) {
+      const ceiling = Math.max(atmosphereState.height, planet.maxElevation + COLLISION_ACTIVATION_MARGIN)
+      if (altitude >= ceiling) {
         if (patch !== undefined) {
           patch.clear()
           this.patches.delete(planet.centreAbs)

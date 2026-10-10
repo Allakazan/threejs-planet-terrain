@@ -19,8 +19,10 @@ uniform vec3 uRayleigh;
 uniform float uRayleighH;
 uniform float uMie;
 uniform float uMieH;
+uniform float uMieExt;
 uniform float uMieG;
 uniform float uSpaceHaze;
+uniform float uHazeGrazing;
 uniform float uCamAltitude;
 uniform float uNight;
 uniform vec3 uNightTint;
@@ -31,9 +33,6 @@ uniform vec3 uNightTint;
 #ifndef ATMO_LIGHT_STEPS
   #define ATMO_LIGHT_STEPS 3
 #endif
-
-/** Mie extinction over scattering: aerosols absorb about a tenth. */
-#define ATMO_MIE_EXT 1.11
 
 /**
  * The flight model's density profile (\`atmosphereFactor\`): an exponential
@@ -107,12 +106,12 @@ vec3 atmoScatter( vec3 o, vec3 d, float t0, float t1, out vec3 trans ) {
     vec2 dens = vec2( atmoDensity( h, uRayleighH ), atmoDensity( h, uMieH ) ) * ds;
     vec2 sun = atmoSunDepth( p, h );
     vec2 depth = od + 0.5 * dens + sun;
-    vec3 att = exp( -( uRayleigh * depth.x + betaM * ATMO_MIE_EXT * depth.y ) );
+    vec3 att = exp( -( uRayleigh * depth.x + betaM * uMieExt * depth.y ) );
     sumR += dens.x * att;
     sumM += dens.y * att;
     od += dens;
   }
-  trans = exp( -( uRayleigh * od.x + betaM * ATMO_MIE_EXT * od.y ) );
+  trans = exp( -( uRayleigh * od.x + betaM * uMieExt * od.y ) );
 
   float mu = dot( d, uSunDir );
   float phaseR = 3.0 / ( 16.0 * PI ) * ( 1.0 + mu * mu );
@@ -147,7 +146,7 @@ export const TERRAIN_ATMOSPHERE_BODY = /* glsl */ `
     // grazing angles, where the terrain's edge meets the sky shell's rim.
     float aSpace = smoothstep( 0.0, uAtmoHeight, uCamAltitude );
     float aGrazing = 1.0 - abs( dot( aD, normalize( vTerrainPos - uPlanetCentre ) ) );
-    float aHaze = mix( 1.0, uSpaceHaze, aSpace * ( 1.0 - pow( aGrazing, 4.0 ) ) );
+    float aHaze = mix( 1.0, uSpaceHaze, aSpace * ( 1.0 - pow( aGrazing, uHazeGrazing ) ) );
     outgoingLight = outgoingLight * mix( vec3( 1.0 ), aTrans, aHaze ) + aIn * aHaze;
   }
 }

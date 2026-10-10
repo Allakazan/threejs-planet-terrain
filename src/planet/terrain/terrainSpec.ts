@@ -71,6 +71,23 @@ export type TerrainSpec = {
   layers: TerrainLayer[]
 }
 
+/** The far material's per-chunk bake (`farBake.ts`). Edited with the material, built with the terrain. */
+export type FarBakeSettings = {
+  /** Box half-width for the cavity's unsharp mask, texels. Also the bake's ring width. */
+  cavityRadius: number
+  /** Gain on `(h - mean h) / texel`, before `tanh`. */
+  cavityGain: number
+}
+
+/**
+ * Everything a worker builds a chunk from, registered per terrain version. Changing
+ * any of it means a new version and a rebuilt planet.
+ */
+export type TerrainBuild = {
+  spec: TerrainSpec
+  bake: FarBakeSettings
+}
+
 /** Upper bound on |altitude|. Loose on purpose — it only feeds a ray test. */
 export function maxElevation(spec: TerrainSpec): number {
   let sum = 0

@@ -14,8 +14,11 @@ import type { PlanetConfig } from './PlanetConfig'
 import { planetStats } from './planetStats'
 import { PlanetTree } from './PlanetTree'
 import { farMaterialStats } from './shading/farMaterialPool'
+// Side effect: puts the default material live, which starts loading its texture packs.
+import './shading/materialStore'
 import { updateShadingFrame } from './shading/shadingUniforms'
 import { geometryPoolStats } from './sharedBuffers'
+import { updateRebuild } from './terrain/terrainStore'
 
 const cameraAbs = new Vector3()
 
@@ -68,6 +71,10 @@ export function Planet({ config }: Props) {
 
     const playerAbs = playerState.absPosition
     current.update(playerAbs)
+    // After the pump, so a tree whose last chunk just uploaded counts as settled.
+    // The tree's own version, not `config`'s: between a re-render and its effect
+    // this callback can already see the new config while the old tree still runs.
+    updateRebuild(current.terrainVersion, chunkWorkerPool.drained)
 
     const pool = geometryPoolStats()
     const far = farMaterialStats()

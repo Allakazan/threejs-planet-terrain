@@ -4,7 +4,7 @@ import { quadSize } from '../quadsphere'
 import { Cellular3D } from './cellular3d'
 import { Simplex3D, mulberry32 } from './simplex3d'
 import { NoiseBasis } from './terrainSpec'
-import type { LayerMask, TerrainSpec } from './terrainSpec'
+import type { LayerMask, TerrainBuild, TerrainSpec } from './terrainSpec'
 import type { TerrainSource } from './TerrainSource'
 
 /**
@@ -276,33 +276,37 @@ export class LayeredTerrain implements TerrainSource {
   }
 }
 
-// --- registry: spec per version, terrain per (seed, radius, version) ---
+// --- registry: build per version, terrain per (seed, radius, version) ---
 
 /**
- * Specs by version. The main thread registers through `terrainStore`; a worker
- * registers whatever the pool sends it. Kept short: once a version is replaced,
- * only requests already posted can still name it.
+ * Builds (spec + bake settings) by version. The main thread registers through
+ * `terrainStore`; a worker registers whatever the pool sends it. Kept short: once a
+ * version is replaced, only requests already posted can still name it.
  */
-const specs = new Map<number, TerrainSpec>()
-const SPECS_KEPT = 2
+const builds = new Map<number, TerrainBuild>()
+const BUILDS_KEPT = 2
 
 const cache = new Map<string, LayeredTerrain>()
 
-export function registerTerrainSpec(version: number, spec: TerrainSpec): void {
-  specs.set(version, spec)
-  for (const old of specs.keys()) {
-    if (old <= version - SPECS_KEPT) specs.delete(old)
+export function registerTerrainBuild(version: number, build: TerrainBuild): void {
+  builds.set(version, build)
+  for (const old of builds.keys()) {
+    if (old <= version - BUILDS_KEPT) builds.delete(old)
   }
   for (const key of cache.keys()) {
     const keyVersion = Number(key.slice(key.lastIndexOf(':') + 1))
-    if (!specs.has(keyVersion)) cache.delete(key)
+    if (!builds.has(keyVersion)) cache.delete(key)
   }
 }
 
+export function terrainBuildFor(version: number): TerrainBuild {
+  const build = builds.get(version)
+  if (build === undefined) throw new Error(`terrain build v${version} was never registered on this thread`)
+  return build
+}
+
 export function terrainSpecFor(version: number): TerrainSpec {
-  const spec = specs.get(version)
-  if (spec === undefined) throw new Error(`terrain spec v${version} was never registered on this thread`)
-  return spec
+  return terrainBuildFor(version).spec
 }
 
 /**

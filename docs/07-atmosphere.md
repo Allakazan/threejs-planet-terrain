@@ -43,16 +43,25 @@ only the far material was hazed, that band would be a seam.
 - **Density** is the flight model's profile (`atmosphereFactor`): an exponential renormalised to 1 at the surface and
   **exactly 0 at the shell**, so the rim fades to nothing instead of ending on an edge. The Rayleigh scale height is
   `ATMOSPHERE_SCALE_HEIGHT`, so what you see is what drags. Mie has its own (`ATMO_MIE_SCALE_HEIGHT`).
-- **Coefficients**: Earth's sea-level β scaled by Earth's scale height over ours (8 km / 30 km for Rayleigh,
-  1.2 km / 4.5 km for Mie). Optical depth is β·H, so the column, and so the colours, stay Earth-like.
+- **Coefficients** are derived in `atmosphereUniforms.applyAtmosphereUniforms`, not stored: Rayleigh β =
+  `ATMO_RAYLEIGH_COEFFICIENTS` (Earth's, 1e-6/m) × 8 km / our scale height × density; Mie β = Earth's 21e-6/m ×
+  1.2 km / our Mie scale height × density. Optical depth is β·H, so the column, and so the colours, stay Earth-like
+  whatever the scale heights; other ratios between the three Rayleigh coefficients give other sky colours.
 - **Raymarch**: uniform midpoint steps, `ATMO_STEPS` × `ATMO_LIGHT_STEPS`: 16×4 for the sky and 8×3 for the terrain.
   Light rays that hit the reference sphere are in shadow, which gives the night side and the red terminator. Phases:
   Rayleigh and Cornette-Shanks.
-- **Sun**: `SUN_DIRECTION` and `SUN_INTENSITY` are shared with the directional light, so the light and the scattering
-  can't drift apart. `ATMO_SUN_INTENSITY = 2 × SUN_INTENSITY`. 1× is physically consistent with the terrain's lighting,
+- **Sun**: the direction (azimuth/elevation, defaulting to `SUN_DIRECTION`) and `SUN_INTENSITY` are shared with the
+  directional light (`SunLights`), so the light and the scattering can't drift apart. The scattering's sun is
+  `ATMO_SUN_SCALE` (2) × `SUN_INTENSITY`. 1× is physically consistent with the terrain's lighting,
   but over this dim ground it reads as a grey sky. At 20 (the first guess) the haze buried the terrain from orbit.
 
-### Tuning knobs (`constants.ts`)
+### Tuning knobs
+
+Defaults in `constants.ts`; live in the planet panel's **atmosphere** folder (`AtmosphereSettings`, applied by
+`atmosphereStore`). Height and scale height drive the flight model too (`atmosphereState`); the collision patch stays
+active up to at least the terrain's `maxElevation` + `COLLISION_ACTIVATION_MARGIN`, since the air can now be thinner
+than the mountains are tall. Mie extinction (`ATMO_MIE_EXTINCTION`), the limb power of the space haze, the night hooks
+and the raymarch step counts (a recompile) are panel knobs as well.
 
 Looking straight down from orbit crosses the same air column as looking straight up from the ground, so physically
 the disk's haze is exactly as bright as the zenith. You can't have a bright zenith and a subtle planet from space with
@@ -60,10 +69,10 @@ physical parameters alone, so the two are decoupled:
 
 | constant | what it does |
 |---|---|
-| `ATMO_SUN_INTENSITY` | overall sky brightness, the **zenith lever**. Too high and the horizon washes out white. |
+| `ATMO_SUN_SCALE` | overall sky brightness, the **zenith lever**. Too high and the horizon washes out white. |
 | `ATMO_SPACE_HAZE` (0..1) | haze over the terrain **seen from space looking down** (1 = physical). Fades in as the camera climbs through the atmosphere and back out at grazing angles, so the terrain's edge still meets the shell's rim without a ring. Artistic, terrain only. |
 | `ATMO_RAYLEIGH_DENSITY` | air density relative to Earth. Changes how deep the blue is and how wide the rim is; barely changes zenith brightness (tested at 1.8). |
-| `ATMO_MIE_SCALE_HEIGHT` / `ATMO_MIE_BETA` | how milky the horizon is and the size of the sun glow. |
+| `ATMO_MIE_SCALE_HEIGHT` / `ATMO_MIE_DENSITY` | how milky the horizon is and the size of the sun glow. |
 
 ### Precision
 

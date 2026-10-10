@@ -56,6 +56,11 @@ export class PlanetTree {
     return this.ctx.nodeCount
   }
 
+  /** The terrain version this tree was built from. */
+  get terrainVersion(): number {
+    return this.ctx.config.terrainVersion
+  }
+
   dispose(): void {
     for (const root of this.roots) root.dispose()
     this.roots.length = 0

@@ -1,6 +1,6 @@
 import { Vector3 } from 'three'
-import { CAVITY_GAIN, CAVITY_RADIUS } from '../core/constants'
 import { faceArc, faceToSphere } from './quadsphere'
+import type { FarBakeSettings } from './terrain/terrainSpec'
 import type { TerrainSource } from './terrain/TerrainSource'
 
 /**
@@ -55,9 +55,10 @@ export function bakeFarTexture(
   radius: number,
   res: number,
   texRes: number,
+  { cavityRadius, cavityGain }: FarBakeSettings,
 ): Uint8Array<ArrayBuffer> {
   // The ring must cover both the normal's ±1 stencil and the cavity box.
-  const ring = Math.max(1, CAVITY_RADIUS)
+  const ring = Math.max(1, cavityRadius)
   const size = texRes + 2 * ring
   ensureGrid(size)
 
@@ -97,7 +98,7 @@ export function bakeFarTexture(
   // it reads the same at every level instead of fading as chunks shrink.
   // A patch's edge is `faceArc · half` long (see `QuadTreeNode.arc`).
   const texelMetres = (faceArc(radius) * half) / (texRes - 1)
-  const boxArea = (2 * CAVITY_RADIUS + 1) ** 2
+  const boxArea = (2 * cavityRadius + 1) ** 2
 
   const out = new Uint8Array(texRes * texRes * 4)
   for (let j = 0; j < texRes; j++) {
@@ -123,10 +124,10 @@ export function bakeFarTexture(
         nz /= len
       }
 
-      const x0 = gi - CAVITY_RADIUS
-      const x1 = gi + CAVITY_RADIUS + 1
-      const y0 = gj - CAVITY_RADIUS
-      const y1 = gj + CAVITY_RADIUS + 1
+      const x0 = gi - cavityRadius
+      const x1 = gi + cavityRadius + 1
+      const y0 = gj - cavityRadius
+      const y1 = gj + cavityRadius + 1
       const boxSum = sat[y1 * stride + x1] - sat[y0 * stride + x1] - sat[y1 * stride + x0] + sat[y0 * stride + x0]
       const cavity = (gridAlt[g] - boxSum / boxArea) / texelMetres
 
@@ -134,7 +135,7 @@ export function bakeFarTexture(
       out[o] = Math.round(nx * 127.5 + 127.5)
       out[o + 1] = Math.round(ny * 127.5 + 127.5)
       out[o + 2] = Math.round(nz * 127.5 + 127.5)
-      out[o + 3] = Math.round((0.5 + 0.5 * Math.tanh(CAVITY_GAIN * cavity)) * 255)
+      out[o + 3] = Math.round((0.5 + 0.5 * Math.tanh(cavityGain * cavity)) * 255)
     }
   }
   return out

@@ -1,9 +1,9 @@
 import { MeshStandardMaterial } from 'three'
 import type { WebGLProgramParametersWithUniforms } from 'three'
-import { USE_BIPLANAR, USE_STOCHASTIC_TILING } from '../core/constants'
 import { ATMOSPHERE_PARS, TERRAIN_ATMOSPHERE_BODY } from './atmosphere/atmosphere.glsl'
 import { atmosphereUniforms } from './atmosphere/atmosphereUniforms'
 import { shadingUniforms } from './shading/shadingUniforms'
+import { definesChanged, sharedTerrainDefines, terrainMaterialOptions } from './shading/terrainMaterialOptions'
 import {
   GRID_BODY,
   GRID_PARS,
@@ -14,8 +14,6 @@ import {
   TERRAIN_VERTEX_BODY,
   TERRAIN_VERTEX_PARS,
 } from './shading/terrainShading.glsl'
-// Side effect: starts loading the terrain textures into `shadingUniforms`.
-import './shading/terrainTextures'
 
 /**
  * Splices the terrain GLSL shared by the near and far materials into a standard
@@ -59,19 +57,20 @@ export function patchTerrainShader(
  * Shared by all those chunks, so they are one shader program and every tuning
  * value is a single uniform write.
  */
+function nearDefines(): Record<string, string> {
+  const defines = sharedTerrainDefines()
+  if (terrainMaterialOptions.biplanar) defines.TERRAIN_BIPLANAR = ''
+  if (terrainMaterialOptions.stochastic) defines.TERRAIN_STOCHASTIC = ''
+  return defines
+}
+
 function createChunkMaterial(): MeshStandardMaterial {
   const material = new MeshStandardMaterial({
     color: 0xffffff,
-    roughness: 0.99,
+    roughness: terrainMaterialOptions.nearRoughness,
     metalness: 0,
   })
-
-  // three only declares the generic `vUv` varying when USE_UV is defined, which
-  // normally happens because some map is bound. Defining it by hand gets the uv
-  // plumbed through by three's own chunks — the grid reads it.
-  material.defines = { USE_UV: '' }
-  if (USE_BIPLANAR) material.defines.TERRAIN_BIPLANAR = ''
-  if (USE_STOCHASTIC_TILING) material.defines.TERRAIN_STOCHASTIC = ''
+  material.defines = nearDefines()
 
   // Without this, three's program cache would happily hand this material the
   // unpatched standard program compiled for some other MeshStandardMaterial in
@@ -90,6 +89,15 @@ function createChunkMaterial(): MeshStandardMaterial {
 }
 
 export const chunkMaterial = createChunkMaterial()
+
+/** Re-reads `terrainMaterialOptions`. Recompiles only when a define actually changed. */
+export function applyNearOptions(): void {
+  chunkMaterial.roughness = terrainMaterialOptions.nearRoughness
+  const defines = nearDefines()
+  if (!definesChanged(chunkMaterial.defines, defines)) return
+  chunkMaterial.defines = defines
+  chunkMaterial.needsUpdate = true
+}
 
 export function setGridEnabled(on: boolean): void {
   shadingUniforms.uGrid.value = on ? 1 : 0

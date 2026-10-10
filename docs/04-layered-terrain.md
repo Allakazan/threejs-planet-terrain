@@ -90,36 +90,57 @@ cleanly (ratio 4.00). This also changes the old terrain's look slightly, which d
 
 ## Getting the spec to the workers
 
-- `terrainStore.ts` (main thread): the current spec plus a version number. `setTerrainSpec` clones, bumps the version,
-  registers it, and notifies. React sees only the version, via `useTerrainVersion` (`useSyncExternalStore`).
-- `LayeredTerrain.ts` keeps a per-thread registry (`registerTerrainSpec` / `terrainSpecFor`) and the memoised
-  `layeredTerrain(seed, radius, version)` factory. It keeps two versions, so requests already posted can finish.
-- `ChunkRequest.terrainVersion` names the spec. Before posting a request with a version a worker hasn't seen,
-  `ChunkWorkerPool.sendTerrain` posts `{ kind: 'terrain', version, spec }`. A worker handles messages in order, so the
-  spec is always registered first.
+- `terrainStore.ts` (main thread): the current **build** — the spec plus the far bake's cavity settings, which are
+  edited with the material but baked by the workers — and a version number. `setTerrainBuild` clones, bumps the
+  version, registers it, and notifies. React sees only the version (`useTerrainVersion`) and the rebuild flag
+  (`useTerrainRebuilding`), both through `useSyncExternalStore`.
+- The **rebuild flag** is set on every publish and cleared by `updateRebuild`, which `Planet` calls each frame with its
+  tree's version and `chunkWorkerPool.drained`: the rebuild is over once the current version's tree has nothing queued,
+  building or waiting to upload — or after `REBUILD_TIMEOUT_MS`, since flying fast keeps the pool busy indefinitely.
+- `LayeredTerrain.ts` keeps a per-thread registry (`registerTerrainBuild` / `terrainBuildFor` / `terrainSpecFor`) and
+  the memoised `layeredTerrain(seed, radius, version)` factory. It keeps two versions, so requests already posted can
+  finish.
+- `ChunkRequest.terrainVersion` names the build. Before posting a request with a version a worker hasn't seen,
+  `ChunkWorkerPool.sendTerrain` posts `{ kind: 'terrain', version, build }`. A worker handles messages in order, so the
+  build is always registered first.
 - `App` rebuilds the `PlanetConfig` in a `useMemo` keyed on the version, reusing the module-scope `MOON_CENTRE`
   (the floating origin holds it by identity). `Planet` already rebuilds its tree when the config changes, and the old
   tree's `dispose()` cancels its in-flight jobs.
 - `PlanetConfig.maxElevation` (the sum of |amplitude| over enabled layers) replaces `MAX_ELEVATION` in the hyperdrive
   ray test.
 
-## Terrain panel (T)
+## Planet panel (T)
 
-`src/ui/TerrainPanel.tsx`. Opening it releases pointer lock. Edits go to a local draft:
+A [leva](https://github.com/pmndrs/leva) panel, `src/ui/panel/`. Opening it releases pointer lock. Leva is only the UI:
+each input's `onChange` writes into the stores (`materialStore`, `atmosphereStore`, the geometry draft), never React
+state, and presets go in through `levaStore.set`, so they take the same path.
 
-- **load preset** puts a preset into the draft;
-- per layer: enable, name, basis, amp (m), λ (km), octaves, lacunarity, gain, seed; warp toggle with λ/strength (km);
-  masks with source layer, lo, hi;
-- ↑ ↓ ✕ reorder or remove layers, and masks are renumbered to keep their targets;
-- **apply** publishes a new version and rebuilds the planet. **revert** discards the draft;
-- **copy JSON** / **paste JSON** move a mix into `presets.ts` and back.
+- **preset** (top) loads a whole `PlanetPreset` — terrain, material and atmosphere. **reload preset** reapplies it.
+  **copy JSON** / **paste JSON** move a whole preset (or, for paste, a bare terrain spec) into `presets.ts` and back;
+  missing material/atmosphere fields fall back to the defaults. **status** shows the version, rebuilding/ready and
+  the max elevation.
+- **geometry**: *load terrain* (the layer stack of any preset), then the layer stack — a custom leva plugin
+  (`layerStackPlugin.ts` → `LayerStack.tsx`). One card per layer: enable, name, basis, amp (m), λ (km, log slider),
+  octaves, lacunarity, gain, seed; warp with λ/strength (km); masks with source layer, lo, hi; ✕ removes, **+ layer**
+  adds. **Drag a card by its ⠿ handle to reorder**; masks are renumbered to keep their targets (`layerEdits.ts`).
+  Sliders commit on release, number boxes on blur or Enter.
+- Edits are debounced (`PANEL_REBUILD_DEBOUNCE_MS`) into a new build — a no-op if the build would be unchanged.
+  **While the planet rebuilds, every input that would start another rebuild is disabled** (the preset selects, the
+  layer stack, the cavity settings, reload and paste), so edits never pile up behind a rebuild in flight. Leva replays
+  an input's `onChange` when it's disabled (with `undefined`) and re-enabled (with its value); the handlers ignore the
+  first and the unchanged-build check absorbs the second.
+- **material** and **atmosphere**: see docs/06 and docs/07. Live, except the far bake's cavity (a rebuild).
 
 Key events aimed at form fields are ignored by flight and debug bindings (`core/keyboard.ts`). The HUD shows
 `build … ms/chunk` (moving average), which is the number to watch when a mix gets expensive.
 
 ## Presets (`presets.ts`)
 
-**rocky** (default, `DEFAULT_TERRAIN_PRESET`):
+Each `PlanetPreset` in `PLANET_PRESETS` pairs one of these terrains with a material and an atmosphere, written as
+overrides of the defaults (`material({...})`, `atmosphere({...})`). `earthlike` is `DEFAULT_PRESET`; its material and
+atmosphere are exactly the constants. The others are rough starting points.
+
+**rocky**:
 
 | layer | basis | λ | amp | masked by |
 |---|---|---|---|---|

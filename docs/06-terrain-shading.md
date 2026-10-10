@@ -67,7 +67,20 @@ Change a scale and you must keep this table true, or a seam appears every time t
 
 **Textures** (`terrainTextures.ts`) are fetched as raw pixels through `createImageBitmap` (no colour conversion, no
 premultiply). They are packed by hand into `DataTexture`s with rows flipped, so v runs up, as GL normal maps expect.
-Each albedo's **linear** average colour is computed on load. The set is chosen by one table at the top of the file.
+Each albedo's **linear** average colour is computed on load. The packs are listed in `texturePacks.ts` (a manual
+manifest: folder + albedo/GL normal/height file names); `loadTexturePack` caches each one for the session, and
+`materialStore` binds whichever pack each slot (ground, cliff) names, dropping a load that a newer pick overtook.
+
+**Grading**: each slot has a tint, brightness and saturation (`terrainGrade`: saturation about the luma, then
+tint × brightness). It is linear, so `materialStore` grades the average colour the same way in JS and the far material
+still matches the textures' converged colour exactly. It lets one rock pack serve as ice, ash or red sandstone.
+
+**Live tuning**: every knob here is a field of `MaterialSettings` (defaults from `constants.ts`), edited in the planet
+panel's **material** folder and applied by `materialStore`: uniforms for most, a recompile for biplanar/stochastic,
+and a planet rebuild for the cavity radius/gain, which the workers bake. Tile, macro and breakup scales are offered
+as powers of two only, so their periods keep dividing `TEX_PERIOD`. Formerly hard-coded shader values are uniforms
+too: the stochastic cell count and blend width, the breakup's fine-octave weight and frequency ratio, and the macro
+clamp range.
 
 ## Far: a per-chunk bake
 

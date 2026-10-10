@@ -4,7 +4,6 @@ import {
   ATMO_COAST_DRAG,
   ATMO_DRAG_LINEAR,
   ATMO_DRAG_QUAD,
-  ATMOSPHERE_HEIGHT,
   AUTOLEVEL_MAX_DOT,
   AUTOLEVEL_MAX_RATE,
   AUTOLEVEL_RATE,
@@ -31,6 +30,7 @@ import {
   THRUST_CRUISE,
   THRUST_IMPULSE,
 } from '../core/constants'
+import { atmosphereState } from '../planet/atmosphere/atmosphereSettings'
 import type { PlanetConfig } from '../planet/PlanetConfig'
 import { atmosphereFactor, blendCap, rayHitsSphere, segmentSphereEntry } from './atmosphere'
 import { HyperState, ThrustMode } from './PlayerState'
@@ -126,7 +126,7 @@ export function stepShip(ship: PlayerState, input: ShipInput, planet: Gravitatin
   // --- integrate, with the atmosphere as a hard stop for the hyperdrive ---
   step.copy(ship.velocity).multiplyScalar(dt)
   if (engaged) {
-    const t = segmentSphereEntry(ship.absPosition, step, planet.centreAbs, planet.radius + ATMOSPHERE_HEIGHT)
+    const t = segmentSphereEntry(ship.absPosition, step, planet.centreAbs, planet.radius + atmosphereState.height)
     if (t >= 0) {
       ship.absPosition.addScaledVector(step, t)
       dropOutOfHyper(ship)

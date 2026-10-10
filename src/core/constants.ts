@@ -36,15 +36,25 @@ export const USE_WORKERS = true
 
 // --- terrain ---
 // The layer stack itself is data, in `planet/terrain/presets.ts`, and is live-edited
-// with the terrain panel (T). See docs/04.
+// with the planet panel (T). See docs/04.
 
-/** Key into `TERRAIN_PRESETS`. */
-export const DEFAULT_TERRAIN_PRESET = 'earthlike'
+/**
+ * Key into `PLANET_PRESETS`. The material and atmosphere constants below are this
+ * preset's values, and the panel's defaults.
+ */
+export const DEFAULT_PRESET = 'earthlike'
 
-/** Per-layer octave cap the terrain panel allows. The Nyquist rule rarely reaches it. */
+/** Per-layer octave cap the planet panel allows. The Nyquist rule rarely reaches it. */
 export const MAX_OCTAVES = 20
 
 export const SEED = 1337
+
+// --- planet panel ---
+
+/** Geometry edits (and the far bake's cavity) settle this long before the planet rebuilds. */
+export const PANEL_REBUILD_DEBOUNCE_MS = 300
+/** The panel's rebuild lock lifts after this even if the pool never drains (flying fast keeps it busy). */
+export const REBUILD_TIMEOUT_MS = 20_000
 
 // --- terrain shading (see docs/06) ---
 
@@ -64,18 +74,27 @@ export const FAR_TEX_RES = 128
  * divides this, or the wrap jumping shows as a seam. Powers of two throughout.
  */
 export const TEX_PERIOD = 8192
+/** Keys into `TEXTURE_PACKS` (`planet/shading/texturePacks.ts`). */
+export const GROUND_TEX_PACK = 'grass_001'
+export const CLIFF_TEX_PACK = 'forest_ground_04'
 /** Metres per texture tile. */
 export const GROUND_TEX_SCALE = 4
 export const CLIFF_TEX_SCALE = 8
 /** The ground albedo once more at this scale, as a brightness modulation that kills tiling from altitude. */
 export const MACRO_TEX_SCALE = 128
 export const MACRO_STRENGTH = 0.6
+/** The macro brightness is clamped to `1 ± this`. */
+export const MACRO_RANGE = 0.5
 /** Size of the shared noise texture, texels. The stochastic lookups and breakup read it. */
 export const NOISE_TEX_SIZE = 256
 /** Metres per noise texel for the slope breakup. Period `NOISE_TEX_SIZE · this` must divide `TEX_PERIOD`. */
 export const BREAKUP_SCALE = 32
 /** How far the noise can push `slope` (which runs 0 flat → 1 vertical). */
 export const BREAKUP_STRENGTH = 0.12
+/** Weight of the breakup's second, finer octave; the first gets `1 - this`. */
+export const BREAKUP_DETAIL = 0.35
+/** Frequency ratio of that second octave. A power of two, so its period still divides `TEX_PERIOD`. */
+export const BREAKUP_OCTAVE_RATIO = 4
 
 /** Slope (`1 - N·up`) where ground starts to give way to cliff, and where cliff is total. */
 export const SLOPE_CLIFF_START = 0.12
@@ -93,6 +112,10 @@ export const USE_STOCHASTIC_TILING = true
 /** Metres from the camera past which the stochastic blend hardens into a single tap. */
 export const STOCHASTIC_FADE_START = 150
 export const STOCHASTIC_FADE_END = 600
+/** Distinct random offsets the noise index picks between. */
+export const STOCHASTIC_CELLS = 8
+/** Half-width of the cross-fade between two neighbouring offsets, in index units (0.5 = always blending). */
+export const STOCHASTIC_BLEND = 0.3
 
 /** Height-blend contact softness, in texture-height units. */
 export const HEIGHT_BLEND_DEPTH = 0.15
@@ -125,6 +148,10 @@ export const CAVITY_GAIN = 1
 export const CAVITY_DARKEN = 0.25
 /** Albedo multiplier at full ridge. */
 export const RIDGE_LIGHTEN = 1.15
+
+/** `MeshStandardMaterial.roughness` of the near and far terrain materials. */
+export const NEAR_ROUGHNESS = 0.99
+export const FAR_ROUGHNESS = 0.95
 
 // --- origin ---
 
@@ -211,7 +238,11 @@ export const THROTTLE_RESPONSE = 4
 
 // --- ship: atmosphere ---
 
-/** Altitude where the atmosphere starts (factor 0) and the hyperdrive cuts out. */
+/**
+ * Altitude where the atmosphere starts (factor 0) and the hyperdrive cuts out.
+ * This and the scale height are defaults: the live values are `atmosphereState`'s,
+ * which the planet panel drives, for the flight model and the sky alike.
+ */
 export const ATMOSPHERE_HEIGHT = 150_000
 /** e-folding height of the density profile. */
 export const ATMOSPHERE_SCALE_HEIGHT = 30_000
@@ -232,13 +263,18 @@ export const ATMO_COAST_DRAG = 0.15
 export const SUN_DIRECTION: readonly [number, number, number] = [0.55, 0.4, 1]
 /** The directional light's intensity: the sun's irradiance as the terrain sees it. */
 export const SUN_INTENSITY = 2.6
+/** Fill light. Almost none: one hard sun. */
+export const AMBIENT_INTENSITY = 0.15
 
 /**
- * Earth's sea-level scattering coefficients, 1/m, scaled by Earth's scale height over
- * ours: optical depth is β·H, so this keeps Earth's column — and its blue — with a
- * 30 km scale height instead of 8 km.
+ * Earth's sea-level Rayleigh coefficients, in 1e-6/m, for R, G, B — and the scale
+ * height they belong to. The shader's β is derived from these in
+ * `atmosphereUniforms` as `coefficients · (EARTH_H / our scale height) · density`:
+ * optical depth is β·H, so that keeps Earth's column — and its blue — whatever the
+ * scale height. Other ratios between the three give other sky colours.
  */
-const RAYLEIGH_EARTH_SCALE = 8_000 / ATMOSPHERE_SCALE_HEIGHT
+export const ATMO_RAYLEIGH_COEFFICIENTS: readonly [number, number, number] = [5.8, 13.5, 33.1]
+export const ATMO_RAYLEIGH_EARTH_SCALE_HEIGHT = 8_000
 /**
  * Air density relative to Earth's (1 = Earth's column). The zenith's brightness and
  * depth of blue: overhead the air is optically thin, so more air means a brighter
@@ -246,23 +282,23 @@ const RAYLEIGH_EARTH_SCALE = 8_000 / ATMOSPHERE_SCALE_HEIGHT
  * also thickens the haze over the disk; `ATMO_SPACE_HAZE` offsets that.
  */
 export const ATMO_RAYLEIGH_DENSITY = 1
-export const ATMO_RAYLEIGH_BETA: readonly [number, number, number] = [
-  5.8e-6 * RAYLEIGH_EARTH_SCALE * ATMO_RAYLEIGH_DENSITY,
-  13.5e-6 * RAYLEIGH_EARTH_SCALE * ATMO_RAYLEIGH_DENSITY,
-  33.1e-6 * RAYLEIGH_EARTH_SCALE * ATMO_RAYLEIGH_DENSITY,
-]
 /** e-folding height of the haze (Mie). Earth's is 1.2 km; scaled up with the air. */
 export const ATMO_MIE_SCALE_HEIGHT = 6_500
-/** Mie scattering, 1/m: Earth's 21e-6 × 1.2 km / `ATMO_MIE_SCALE_HEIGHT`. Extinction is β / 0.9. */
-export const ATMO_MIE_BETA = 21e-6 * (1_200 / ATMO_MIE_SCALE_HEIGHT)
+/**
+ * Haze relative to Earth's column. β is derived as Earth's 21e-6/m × 1.2 km /
+ * `ATMO_MIE_SCALE_HEIGHT` × this, so the column stays put as the scale height moves.
+ */
+export const ATMO_MIE_DENSITY = 1
+/** Mie extinction over scattering: aerosols absorb about a tenth. */
+export const ATMO_MIE_EXTINCTION = 1.11
 /** Henyey-Greenstein asymmetry: how strongly the haze glows around the sun. */
 export const ATMO_MIE_G = 0.76
 /**
- * The sun as the scattering sees it. Physically it equals `SUN_INTENSITY`; that reads
- * as a grey sky over this dim ground, so the air gets a little more. Much past 2×
- * the haze buries the terrain from orbit (20 turned the disk milky).
+ * The sun as the scattering sees it, as a multiple of `SUN_INTENSITY`. Physically 1;
+ * that reads as a grey sky over this dim ground, so the air gets a little more. Much
+ * past 2× the haze buries the terrain from orbit (20× SUN_INTENSITY turned the disk milky).
  */
-export const ATMO_SUN_INTENSITY = SUN_INTENSITY * 2
+export const ATMO_SUN_SCALE = 2
 /**
  * Strength of the haze over the terrain seen **from space, looking down**, 0..1
  * (1 = physical). Looking straight down crosses the same column of air as looking
@@ -272,6 +308,23 @@ export const ATMO_SUN_INTENSITY = SUN_INTENSITY * 2
  * terrain's edge meets the sky shell's rim without a step.
  */
 export const ATMO_SPACE_HAZE = 0.4
+/** How quickly the space haze returns towards the limb: `1 - (1 - |d·up|)^this`. */
+export const ATMO_HAZE_GRAZING_POWER = 4
+
+/**
+ * Hooks for a future day/night system. `ATMO_NIGHT` (0..1) fades the sun out of
+ * the scattering; the airglow is linear radiance per unit of (1 - transmittance);
+ * the sky fully hides what is behind it (future stars) at `ATMO_SKY_HIDE` luminance.
+ */
+export const ATMO_NIGHT = 0
+export const ATMO_NIGHT_TINT: readonly [number, number, number] = [0.004, 0.007, 0.018]
+export const ATMO_SKY_HIDE = 0.3
+
+/** Raymarch samples along the view ray and towards the sun: terrain aerial perspective, then the sky shell. */
+export const ATMO_TERRAIN_STEPS = 8
+export const ATMO_TERRAIN_LIGHT_STEPS = 3
+export const ATMO_SKY_STEPS = 16
+export const ATMO_SKY_LIGHT_STEPS = 4
 
 // --- ship: hyperdrive ---
 
@@ -298,8 +351,14 @@ export const CHASE_OFFSET: readonly [number, number, number] = [0, 4, 18]
 export const CAMERA_ROT_LAG = 6
 
 // --- collision (see docs/05) ---
-// The patch is active inside a planet's atmosphere (`ATMOSPHERE_HEIGHT`), and only
-// builds tiles where the ship's predicted path comes near the terrain.
+// The patch is active inside a planet's atmosphere, and only builds tiles where the
+// ship's predicted path comes near the terrain.
+
+/**
+ * The atmosphere is live-tunable and can be thinner than the mountains are tall, so
+ * the patch stays active up to at least `maxElevation` plus this, metres.
+ */
+export const COLLISION_ACTIVATION_MARGIN = 20_000
 
 /** Root tiles: ~1.4 km at Moon scale. Coarsest level the patch ever builds. */
 export const COLLISION_MIN_LEVEL = 12

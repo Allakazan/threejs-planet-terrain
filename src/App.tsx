@@ -2,17 +2,18 @@ import { Canvas } from '@react-three/fiber'
 import { useMemo } from 'react'
 import { Vector3 } from 'three'
 import { AdaptiveFov } from './AdaptiveFov'
-import { CAMERA_FAR, CAMERA_FOV, CAMERA_NEAR, SUN_DIRECTION, SUN_INTENSITY } from './core/constants'
+import { CAMERA_FAR, CAMERA_FOV, CAMERA_NEAR } from './core/constants'
 import { OriginContext, floatingOrigin } from './core/originContext'
 import { CollisionDebug } from './debug/CollisionDebug'
 import { useDebugKeys } from './debug/useDebugKeys'
+import { SunLights } from './planet/atmosphere/SunLights'
 import { Planet } from './planet/Planet'
 import { planetConfig } from './planet/PlanetConfig'
 import { useTerrainVersion } from './planet/terrain/terrainStore'
 import { Player } from './player/Player'
 import { DebugHud } from './ui/DebugHud'
+import { PlanetPanel } from './ui/panel/PlanetPanel'
 import { ShipHud } from './ui/ShipHud'
-import { TerrainPanel } from './ui/TerrainPanel'
 
 /**
  * Module scope: the floating origin holds the planet centre by identity, so it
@@ -41,18 +42,14 @@ function App() {
       >
         <color attach="background" args={['#000000']} />
         <AdaptiveFov fov={CAMERA_FOV} />
-        {/* Almost no fill light, one hard sun. A directional light's direction comes
-            from its position, which is origin-independent, so this stays fixed however
-            far the player rebases. The atmosphere scatters from the same direction. */}
-        <ambientLight intensity={0.15} />
-        <directionalLight position={SUN_DIRECTION} intensity={SUN_INTENSITY} />
+        <SunLights />
         <Player planet={moon} />
         <Planet config={moon} />
         <CollisionDebug planet={moon} />
       </Canvas>
       <ShipHud />
       <DebugHud />
-      <TerrainPanel />
+      <PlanetPanel />
     </OriginContext>
   )
 }

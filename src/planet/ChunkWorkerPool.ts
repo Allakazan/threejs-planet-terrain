@@ -2,7 +2,7 @@ import { Vector3 } from 'three'
 import { MAX_UPLOADS_PER_FRAME, USE_WORKERS, WORKER_COUNT } from '../core/constants'
 import { buildChunk } from './chunkGeometry'
 import type { ChunkRequest, ChunkResult, WorkerMessage } from './chunkGeometry'
-import { terrainSpecFor } from './terrain/LayeredTerrain'
+import { terrainBuildFor } from './terrain/LayeredTerrain'
 
 /** Smoothing of the HUD's build-time average, per arriving chunk. */
 const BUILD_MS_SMOOTHING = 0.05
@@ -137,13 +137,13 @@ export class ChunkWorkerPool {
   }
 
   /**
-   * Workers build their terrain from a spec they hold locally, so a request for a
-   * version a worker has not seen is preceded by that version's spec. A worker
-   * handles its messages in order, so the spec is always registered first.
+   * Workers build their terrain from a build they hold locally, so a request for a
+   * version a worker has not seen is preceded by that version's build. A worker
+   * handles its messages in order, so the build is always registered first.
    */
   private sendTerrain(worker: Worker, version: number): void {
     if ((this.terrainSent.get(worker) ?? 0) >= version) return
-    worker.postMessage({ kind: 'terrain', version, spec: terrainSpecFor(version) } satisfies WorkerMessage)
+    worker.postMessage({ kind: 'terrain', version, build: terrainBuildFor(version) } satisfies WorkerMessage)
     this.terrainSent.set(worker, version)
   }
 
@@ -204,6 +204,11 @@ export class ChunkWorkerPool {
 
   get inFlightCount(): number {
     return this.inFlight.size
+  }
+
+  /** Nothing queued, building or waiting to upload: whatever was asked for has landed. */
+  get drained(): boolean {
+    return this.queue.length === 0 && this.inFlight.size === 0 && this.arrived.length === 0
   }
 
   dispose(): void {
