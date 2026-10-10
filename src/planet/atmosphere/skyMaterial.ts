@@ -1,4 +1,5 @@
 import { BackSide, CustomBlending, MeshBasicMaterial, OneFactor, OneMinusSrcAlphaFactor } from 'three'
+import { ATMO_SKY_LIGHT_STEPS, ATMO_SKY_STEPS } from '../../core/constants'
 import { shadingUniforms } from '../shading/shadingUniforms'
 import { ATMOSPHERE_PARS } from './atmosphere.glsl'
 import { atmosphereUniforms } from './atmosphereUniforms'
@@ -65,7 +66,7 @@ function createSkyMaterial(): MeshBasicMaterial {
     blendSrc: OneFactor,
     blendDst: OneMinusSrcAlphaFactor,
   })
-  material.defines = { ATMO_STEPS: '16', ATMO_LIGHT_STEPS: '4' }
+  material.defines = { ATMO_STEPS: String(ATMO_SKY_STEPS), ATMO_LIGHT_STEPS: String(ATMO_SKY_LIGHT_STEPS) }
   material.customProgramCacheKey = () => 'atmosphere-sky'
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, atmosphereUniforms, { uPlanetCentre: shadingUniforms.uPlanetCentre })
@@ -80,3 +81,11 @@ function createSkyMaterial(): MeshBasicMaterial {
 }
 
 export const skyMaterial = createSkyMaterial()
+
+/** Raymarch samples for the sky. A change recompiles the sky's program. */
+export function setSkySteps(steps: number, lightSteps: number): void {
+  const defines = skyMaterial.defines as Record<string, string>
+  if (defines.ATMO_STEPS === String(steps) && defines.ATMO_LIGHT_STEPS === String(lightSteps)) return
+  skyMaterial.defines = { ATMO_STEPS: String(steps), ATMO_LIGHT_STEPS: String(lightSteps) }
+  skyMaterial.needsUpdate = true
+}

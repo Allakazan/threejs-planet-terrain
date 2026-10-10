@@ -125,6 +125,24 @@ uniform float uHeightDepth;
 uniform float uHeightInfluence;
 uniform float uNearFadeStart;
 uniform float uNearFadeEnd;
+uniform float uStochCells;
+uniform float uStochBlend;
+uniform float uBreakupDetail;
+uniform float uBreakupRatio;
+uniform float uMacroRange;
+uniform vec4 uGroundGrade;
+uniform vec4 uCliffGrade;
+
+const vec3 TERRAIN_LUMA = vec3( 0.2126, 0.7152, 0.0722 );
+
+/**
+ * Per-slot albedo grading: saturation about the luma (w), then tint × brightness
+ * (rgb). Linear, so grading the average colour (done in JS, see \`materialStore\`)
+ * gives exactly the average of the graded texture — the handover stays seamless.
+ */
+vec3 terrainGrade( vec3 c, vec4 grade ) {
+  return mix( vec3( dot( c, TERRAIN_LUMA ) ), c, grade.w ) * grade.rgb;
+}
 
 #ifdef TERRAIN_BIPLANAR
   #define TERRAIN_PROJECTIONS 2
@@ -206,11 +224,11 @@ void terrainSample( sampler2D albedoMap, sampler2D normalMap, vec2 uv, vec2 dx, 
                     out vec4 albedo, out vec3 tnormal ) {
 #ifdef TERRAIN_STOCHASTIC
   float s = 1.0 / uNoiseSize;
-  float k = textureGrad( uNoise, uv * s, dx * s, dy * s ).r * 8.0;
+  float k = textureGrad( uNoise, uv * s, dx * s, dy * s ).r * uStochCells;
   float ia = floor( k );
   vec2 oa = sin( vec2( 3.0, 7.0 ) * ia );
   vec2 ob = sin( vec2( 3.0, 7.0 ) * ( ia + 1.0 ) );
-  float b = smoothstep( 0.2, 0.8, fract( k ) );
+  float b = smoothstep( 0.5 - uStochBlend, 0.5 + uStochBlend, fract( k ) );
   b = mix( step( 0.5, b ), b, stoch );
 
   albedo = vec4( 0.0 );
@@ -256,14 +274,14 @@ terrainProjections( tN, tAxis, tW );
 float tBreak = 0.0;
 {
   float s1 = 1.0 / ( uBreakupScale * uNoiseSize );
-  float s2 = 4.0 * s1;
+  float s2 = uBreakupRatio * s1;
   for ( int i = 0; i < TERRAIN_PROJECTIONS; i++ ) {
     vec2 uv = terrainUv( tP, tAxis[ i ] );
     vec2 dx = terrainUv( tPdx, tAxis[ i ] );
     vec2 dy = terrainUv( tPdy, tAxis[ i ] );
     float n1 = textureGrad( uNoise, uv * s1, dx * s1, dy * s1 ).g;
     float n2 = textureGrad( uNoise, uv * s2, dx * s2, dy * s2 ).b;
-    tBreak += tW[ i ] * ( 0.65 * n1 + 0.35 * n2 - 0.5 );
+    tBreak += tW[ i ] * ( mix( n1, n2, uBreakupDetail ) - 0.5 );
   }
 }
 
@@ -296,20 +314,20 @@ if ( tFade < 0.999 ) {
     if ( needGround ) {
       float s = 1.0 / uGroundScale;
       terrainSample( uGroundAlbedo, uGroundNormal, uv * s, dx * s, dy * s, tStoch, albedo, tn );
-      gA += w * albedo;
+      gA += w * vec4( terrainGrade( albedo.rgb, uGroundGrade ), albedo.a );
       gN += w * terrainWhiteout( tn, tN, a );
     }
     if ( needCliff ) {
       float s = 1.0 / uCliffScale;
       terrainSample( uCliffAlbedo, uCliffNormal, uv * s, dx * s, dy * s, tStoch, albedo, tn );
-      cA += w * albedo;
+      cA += w * vec4( terrainGrade( albedo.rgb, uCliffGrade ), albedo.a );
       cN += w * terrainWhiteout( tn, tN, a );
     }
 
     // Macro: the ground albedo once more, huge and single-tap, read only for its
     // brightness. Breaks up the "carpet" that any tiling shows from altitude.
     float m = 1.0 / uMacroScale;
-    macro += w * textureGrad( uGroundAlbedo, uv * m, dx * m, dy * m ).rgb;
+    macro += w * terrainGrade( textureGrad( uGroundAlbedo, uv * m, dx * m, dy * m ).rgb, uGroundGrade );
   }
 
   // --- height blend: the slope weight decides the region, texture heights decide
@@ -325,9 +343,8 @@ if ( tFade < 0.999 ) {
 
   vec3 textured = gA.rgb * wg + cA.rgb * wc;
 
-  const vec3 LUMA = vec3( 0.2126, 0.7152, 0.0722 );
-  float macroLum = dot( macro, LUMA ) / max( dot( uGroundAvg, LUMA ), 1e-4 );
-  textured *= mix( 1.0, clamp( macroLum, 0.5, 1.5 ), uMacroStrength );
+  float macroLum = dot( macro, TERRAIN_LUMA ) / max( dot( uGroundAvg, TERRAIN_LUMA ), 1e-4 );
+  textured *= mix( 1.0, clamp( macroLum, 1.0 - uMacroRange, 1.0 + uMacroRange ), uMacroStrength );
   textured *= 1.0 + tBreak * uMacroStrength;
 
   vec3 mapped = vec3( 0.0 );

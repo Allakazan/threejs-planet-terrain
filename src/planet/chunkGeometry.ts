@@ -1,8 +1,8 @@
 import { Vector3 } from 'three'
 import { bakeFarTexture } from './farBake'
 import { faceToSphere } from './quadsphere'
-import { layeredTerrain } from './terrain/LayeredTerrain'
-import type { TerrainSpec } from './terrain/terrainSpec'
+import { layeredTerrain, terrainBuildFor } from './terrain/LayeredTerrain'
+import type { TerrainBuild } from './terrain/terrainSpec'
 
 /**
  * Everything the generator needs, and nothing that cannot survive a
@@ -33,11 +33,12 @@ export type ChunkRequest = {
 }
 
 /**
- * Main thread → worker. A `terrain` message always precedes the first request that
- * names its version; per-worker message order makes that sufficient.
+ * Main thread → worker. A `terrain` message (the version's spec and bake settings)
+ * always precedes the first request that names its version; per-worker message
+ * order makes that sufficient.
  */
 export type WorkerMessage =
-  | { kind: 'terrain'; version: number; spec: TerrainSpec }
+  | { kind: 'terrain'; version: number; build: TerrainBuild }
   | { kind: 'chunk'; req: ChunkRequest }
 
 export type ChunkResult = {
@@ -201,7 +202,8 @@ export function buildChunk(req: ChunkRequest): ChunkResult {
   const bakeRes = req.bakeRes ?? 0
   if (bakeRes > 0) {
     const bakeStarted = performance.now()
-    bake = bakeFarTexture(terrain, face, cu, cv, half, level, radius, res, bakeRes)
+    const { bake: settings } = terrainBuildFor(req.terrainVersion)
+    bake = bakeFarTexture(terrain, face, cu, cv, half, level, radius, res, bakeRes, settings)
     bakeMs = performance.now() - bakeStarted
   }
 

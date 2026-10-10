@@ -8,6 +8,7 @@ import {
 } from 'three'
 import { FAR_TEX_RES } from '../../core/constants'
 import { patchTerrainShader } from '../chunkMaterial'
+import { definesChanged, sharedTerrainDefines, terrainMaterialOptions } from './terrainMaterialOptions'
 import { FAR_AO_BODY, FAR_COLOR_BODY, FAR_PARS, TERRAIN_NORMAL_BODY } from './terrainShading.glsl'
 
 /**
@@ -34,12 +35,12 @@ function createFarMaterial(): MeshStandardMaterial {
 
   const material = new MeshStandardMaterial({
     color: 0xffffff,
-    roughness: 0.95,
+    roughness: terrainMaterialOptions.farRoughness,
     metalness: 0,
     normalMap: texture,
     normalMapType: ObjectSpaceNormalMap,
   })
-  material.defines = { USE_UV: '' }
+  material.defines = sharedTerrainDefines()
   material.customProgramCacheKey = () => 'terrain-far'
   material.onBeforeCompile = (shader) => {
     patchTerrainShader(shader, FAR_PARS, FAR_COLOR_BODY)
@@ -53,14 +54,15 @@ function createFarMaterial(): MeshStandardMaterial {
 }
 
 const pool: MeshStandardMaterial[] = []
-let created = 0
+/** Every far material ever made, in use or parked, so an options change reaches all of them. */
+const all: MeshStandardMaterial[] = []
 
 /** A far material holding `bake`. Return it with `releaseFarMaterial`. */
 export function acquireFarMaterial(bake: Uint8Array): MeshStandardMaterial {
   let material = pool.pop()
   if (material === undefined) {
     material = createFarMaterial()
-    created++
+    all.push(material)
   }
   const texture = material.normalMap as DataTexture
   ;(texture.image.data as Uint8Array).set(bake)
@@ -74,5 +76,19 @@ export function releaseFarMaterial(material: MeshStandardMaterial): void {
 
 /** For the HUD: far materials (and textures) ever made, and how many are parked. */
 export function farMaterialStats(): { created: number; free: number } {
-  return { created, free: pool.length }
+  return { created: all.length, free: pool.length }
+}
+
+/**
+ * Re-reads `terrainMaterialOptions` into every far material. They share one
+ * program, so a define change costs one recompile, not one per material.
+ */
+export function applyFarOptions(): void {
+  const defines = sharedTerrainDefines()
+  for (const material of all) {
+    material.roughness = terrainMaterialOptions.farRoughness
+    if (!definesChanged(material.defines, defines)) continue
+    material.defines = { ...defines }
+    material.needsUpdate = true
+  }
 }

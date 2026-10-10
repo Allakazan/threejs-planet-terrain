@@ -1,5 +1,20 @@
+import { atmosphere } from '../atmosphere/atmosphereSettings'
+import type { AtmosphereSettings } from '../atmosphere/atmosphereSettings'
+import { material } from '../shading/materialSettings'
+import type { MaterialSettings } from '../shading/materialSettings'
 import { NoiseBasis } from './terrainSpec'
 import type { TerrainLayer, TerrainSpec } from './terrainSpec'
+
+/**
+ * A whole planet's look as plain data: the terrain layer stack, the surface
+ * material and the atmosphere. What the planet panel's preset combo loads and its
+ * JSON buttons copy and paste.
+ */
+export type PlanetPreset = {
+  terrain: TerrainSpec
+  material: MaterialSettings
+  atmosphere: AtmosphereSettings
+}
 
 /** Defaults for the fields most layers leave alone. */
 function layer(fields: Partial<TerrainLayer> & Pick<TerrainLayer, 'name' | 'basis' | 'wavelength' | 'amplitude'>): TerrainLayer {
@@ -310,17 +325,162 @@ const FLATLANDS: TerrainSpec = {
   ],
 }
 
-export const TERRAIN_PRESETS: Readonly<Record<string, TerrainSpec>> = {
-  rocky: ROCKY,
-  earthlike: EARTHLIKE,
-  alpine: ALPINE,
-  desert: DESERT,
-  canyonlands: CANYONLANDS,
-  badlands: BADLANDS,
-  volcanic: VOLCANIC,
-  icy: ICY,
-  shattered: SHATTERED,
-  archipelago: ARCHIPELAGO,
-  foam: FOAM,
-  flatlands: FLATLANDS,
+// --- the planets: terrain + material + atmosphere ---
+// `earthlike` is the default preset, so its material and atmosphere are exactly the
+// constants. The others are starting points, tuned by eye only roughly; the
+// texture packs are whatever `TEXTURE_PACKS` holds today.
+
+export const PLANET_PRESETS: Readonly<Record<string, PlanetPreset>> = {
+  /** Airless grey rock: a whisper of exosphere, rock on every slope. */
+  rocky: {
+    terrain: ROCKY,
+    material: material({
+      groundPack: 'rocks_ground_02',
+      groundSaturation: 0.1,
+      groundBrightness: 1.2,
+      cliffPack: 'rocks_ground_02',
+      cliffSaturation: 0,
+      cliffBrightness: 0.8,
+      cliffScale: 16,
+      slopeStart: 0.2,
+      slopeEnd: 0.45,
+      cavityGain: 1.6,
+      cavityDarken: 0.15,
+    }),
+    atmosphere: atmosphere({ height: 20_000, scaleHeight: 5_000, rayleighDensity: 0.03, mieDensity: 0.05, spaceHaze: 0.2 }),
+  },
+  earthlike: { terrain: EARTHLIKE, material: material({}), atmosphere: atmosphere({}) },
+  /** Meadows under bare rock, steep enough that rock takes most slopes; thin, deep-blue air. */
+  alpine: {
+    terrain: ALPINE,
+    material: material({
+      groundPack: 'grass_004',
+      cliffPack: 'rocks_ground_02',
+      cliffSaturation: 0.5,
+      slopeStart: 0.08,
+      slopeEnd: 0.22,
+    }),
+    atmosphere: atmosphere({ rayleighDensity: 0.8, mieDensity: 0.6 }),
+  },
+  /** Bright sand, dusty orange-tinged sky. */
+  desert: {
+    terrain: DESERT,
+    material: material({
+      groundPack: 'rocky_trail_02',
+      groundTint: '#ffe2b8',
+      groundBrightness: 1.5,
+      groundScale: 8,
+      cliffPack: 'forest_ground_04',
+      cliffTint: '#ffc48a',
+      cliffBrightness: 1.2,
+      slopeStart: 0.2,
+      slopeEnd: 0.45,
+    }),
+    atmosphere: atmosphere({ rayleighDensity: 0.7, rayleighCoefficients: [8, 13.5, 25], mieDensity: 3, mieG: 0.7, spaceHaze: 0.5 }),
+  },
+  /** Red rock on the mesas and the cliffs between them. */
+  canyonlands: {
+    terrain: CANYONLANDS,
+    material: material({
+      groundPack: 'rocky_trail_02',
+      groundBrightness: 1.15,
+      cliffPack: 'rocky_trail_02',
+      cliffTint: '#ff9c6b',
+      cliffBrightness: 1.1,
+      cliffSaturation: 1.3,
+      slopeStart: 0.1,
+      slopeEnd: 0.25,
+    }),
+    atmosphere: atmosphere({ mieDensity: 1.5 }),
+  },
+  /** Dry dirt over reddish rills; hazy. */
+  badlands: {
+    terrain: BADLANDS,
+    material: material({
+      groundPack: 'forest_ground_04',
+      groundTint: '#e6c49c',
+      groundBrightness: 1.2,
+      cliffPack: 'rocky_trail_02',
+      slopeStart: 0.1,
+      slopeEnd: 0.28,
+    }),
+    atmosphere: atmosphere({ mieDensity: 2, mieG: 0.72 }),
+  },
+  /** Black basalt and ash under a thick, brownish-orange sky. */
+  volcanic: {
+    terrain: VOLCANIC,
+    material: material({
+      groundPack: 'rocks_ground_02',
+      groundBrightness: 0.45,
+      groundSaturation: 0.3,
+      cliffPack: 'forest_ground_04',
+      cliffBrightness: 0.35,
+      cliffSaturation: 0.2,
+      ridgeLighten: 1.05,
+    }),
+    atmosphere: atmosphere({
+      rayleighCoefficients: [20, 14, 10],
+      mieDensity: 5,
+      mieScaleHeight: 9_000,
+      mieG: 0.6,
+      spaceHaze: 0.55,
+    }),
+  },
+  /** Rock graded to ice and frost; a thin, pale sky. */
+  icy: {
+    terrain: ICY,
+    material: material({
+      groundPack: 'rocks_ground_02',
+      groundTint: '#dbe9ff',
+      groundSaturation: 0.05,
+      groundBrightness: 2.6,
+      cliffPack: 'rocks_ground_02',
+      cliffTint: '#a9c8ff',
+      cliffSaturation: 0.2,
+      cliffBrightness: 1.5,
+      slopeStart: 0.15,
+      slopeEnd: 0.35,
+    }),
+    atmosphere: atmosphere({ height: 40_000, scaleHeight: 8_000, rayleighDensity: 0.15, mieDensity: 0.1 }),
+  },
+  /** Grey plates under an alien magenta sky. */
+  shattered: {
+    terrain: SHATTERED,
+    material: material({
+      groundPack: 'rocks_ground_02',
+      groundSaturation: 0.4,
+      cliffPack: 'forest_ground_04',
+      cliffBrightness: 0.6,
+      cliffSaturation: 0.5,
+      slopeStart: 0.1,
+      slopeEnd: 0.25,
+    }),
+    atmosphere: atmosphere({ rayleighDensity: 0.6, rayleighCoefficients: [20, 8, 30] }),
+  },
+  /** Lush green islands, humid haze. */
+  archipelago: {
+    terrain: ARCHIPELAGO,
+    material: material({ groundPack: 'grass_007', cliffPack: 'rocks_ground_02' }),
+    atmosphere: atmosphere({ rayleighDensity: 1.2, mieDensity: 2 }),
+  },
+  /** Teal ground, violet walls, a green sky. */
+  foam: {
+    terrain: FOAM,
+    material: material({
+      groundPack: 'grass_004',
+      groundTint: '#9ff5e0',
+      groundSaturation: 0.6,
+      cliffPack: 'rocky_trail_02',
+      cliffTint: '#d6a0ff',
+      cliffSaturation: 0.4,
+      cliffBrightness: 1.3,
+    }),
+    atmosphere: atmosphere({ rayleighCoefficients: [4, 25, 20] }),
+  },
+  /** Yellow-green grass to the horizon. */
+  flatlands: {
+    terrain: FLATLANDS,
+    material: material({ groundPack: 'grass_004' }),
+    atmosphere: atmosphere({}),
+  },
 }

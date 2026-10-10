@@ -1,7 +1,9 @@
-import { Color, DataTexture, RGBAFormat, SRGBColorSpace, Vector3 } from 'three'
+import { Color, DataTexture, RGBAFormat, SRGBColorSpace, Vector3, Vector4 } from 'three'
 import type { Texture } from 'three'
 import {
   BIPLANAR_SHARPNESS,
+  BREAKUP_DETAIL,
+  BREAKUP_OCTAVE_RATIO,
   BREAKUP_SCALE,
   BREAKUP_STRENGTH,
   CAVITY_DARKEN,
@@ -12,6 +14,7 @@ import {
   GROUND_TEX_SCALE,
   HEIGHT_BLEND_DEPTH,
   HEIGHT_BLEND_INFLUENCE,
+  MACRO_RANGE,
   MACRO_STRENGTH,
   MACRO_TEX_SCALE,
   NOISE_TEX_SIZE,
@@ -23,6 +26,8 @@ import {
   SHOW_GRID,
   SLOPE_CLIFF_END,
   SLOPE_CLIFF_START,
+  STOCHASTIC_BLEND,
+  STOCHASTIC_CELLS,
   STOCHASTIC_FADE_END,
   STOCHASTIC_FADE_START,
   TERRAIN_SHADER_MIN_LOD,
@@ -69,19 +74,28 @@ export const shadingUniforms = {
   uGroundNormal: { value: solidTexture(128, 128, 255, 255, false) as Texture },
   uCliffAlbedo: { value: solidTexture(110, 105, 100, 128, true) as Texture },
   uCliffNormal: { value: solidTexture(128, 128, 255, 255, false) as Texture },
-  /** Linear average colour of each albedo: what the textures converge to, and all the far material draws. */
+  /**
+   * Linear average colour of each albedo, **graded** (see `uGroundGrade`): what the
+   * textures converge to, and all the far material draws. Written by `materialStore`.
+   */
   uGroundAvg: { value: new Color(0.14, 0.17, 0.08) },
   uCliffAvg: { value: new Color(0.15, 0.14, 0.12) },
   uNoise: { value: noiseTexture as Texture },
   uNoiseSize: { value: NOISE_TEX_SIZE },
 
-  // --- tuning (constants today; uniforms so a panel can drive them later) ---
+  // --- tuning: defaults from the constants; the planet panel drives them through `materialStore` ---
+  /** Albedo grading per slot: rgb = linear tint × brightness, w = saturation. */
+  uGroundGrade: { value: new Vector4(1, 1, 1, 1) },
+  uCliffGrade: { value: new Vector4(1, 1, 1, 1) },
   uGroundScale: { value: GROUND_TEX_SCALE },
   uCliffScale: { value: CLIFF_TEX_SCALE },
   uMacroScale: { value: MACRO_TEX_SCALE },
   uMacroStrength: { value: MACRO_STRENGTH },
+  uMacroRange: { value: MACRO_RANGE },
   uBreakupScale: { value: BREAKUP_SCALE },
   uBreakupStrength: { value: BREAKUP_STRENGTH },
+  uBreakupDetail: { value: BREAKUP_DETAIL },
+  uBreakupRatio: { value: BREAKUP_OCTAVE_RATIO },
   uSlopeStart: { value: SLOPE_CLIFF_START },
   uSlopeEnd: { value: SLOPE_CLIFF_END },
   uTriSharpness: { value: TRIPLANAR_SHARPNESS },
@@ -89,6 +103,8 @@ export const shadingUniforms = {
   uBiSharpness: { value: BIPLANAR_SHARPNESS },
   uStochStart: { value: STOCHASTIC_FADE_START },
   uStochEnd: { value: STOCHASTIC_FADE_END },
+  uStochCells: { value: STOCHASTIC_CELLS },
+  uStochBlend: { value: STOCHASTIC_BLEND },
   uHeightDepth: { value: HEIGHT_BLEND_DEPTH },
   uHeightInfluence: { value: HEIGHT_BLEND_INFLUENCE },
   uNearFadeStart: { value: NEAR_FADE_START },

@@ -1,16 +1,17 @@
 import type { Vector3 } from 'three'
-import { ATMOSPHERE_HEIGHT, ATMOSPHERE_SCALE_HEIGHT } from '../core/constants'
-
-const TOP = Math.exp(-ATMOSPHERE_HEIGHT / ATMOSPHERE_SCALE_HEIGHT)
+import { atmosphereState } from '../planet/atmosphere/atmosphereSettings'
 
 /**
- * Normalised density: an exponential profile rescaled so it is exactly 0 at
- * `ATMOSPHERE_HEIGHT` (no discontinuity at the edge) and 1 at the surface.
+ * Normalised density: an exponential profile rescaled so it is exactly 0 at the
+ * atmosphere's height (no discontinuity at the edge) and 1 at the surface. Height
+ * and scale height are the live `atmosphereState`, the same the sky draws with.
  */
 export function atmosphereFactor(altitude: number): number {
-  if (altitude >= ATMOSPHERE_HEIGHT) return 0
+  const { height, scaleHeight } = atmosphereState
+  if (altitude >= height) return 0
+  const top = Math.exp(-height / scaleHeight)
   const h = Math.max(0, altitude)
-  return (Math.exp(-h / ATMOSPHERE_SCALE_HEIGHT) - TOP) / (1 - TOP)
+  return (Math.exp(-h / scaleHeight) - top) / (1 - top)
 }
 
 /** `space · (surface/space)^atmo` — falls evenly across orders of magnitude. */

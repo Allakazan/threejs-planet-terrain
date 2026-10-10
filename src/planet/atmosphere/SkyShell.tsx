@@ -1,6 +1,8 @@
-import { useEffect, useMemo } from 'react'
+import { useFrame } from '@react-three/fiber'
+import { useEffect, useMemo, useRef } from 'react'
 import { SphereGeometry } from 'three'
-import { ATMOSPHERE_HEIGHT } from '../../core/constants'
+import type { Mesh } from 'three'
+import { atmosphereState } from './atmosphereSettings'
 import { skyMaterial } from './skyMaterial'
 
 type Props = {
@@ -8,14 +10,21 @@ type Props = {
 }
 
 /**
- * The atmosphere's outer shell, `radius + ATMOSPHERE_HEIGHT`. Mount it inside the
- * planet's root group: it is centred there, and rebases with it for free.
+ * The atmosphere's outer shell, `radius + atmosphereState.height`. Mount it inside
+ * the planet's root group: it is centred there, and rebases with it for free.
  *
- * 128×64 segments sag at most ~1.2 km inside the true sphere — irrelevant, since
- * the shader intersects the real one.
+ * A unit sphere scaled every frame, so the live-tunable height costs nothing. 128×64
+ * segments sag at most ~1.2 km inside the true sphere — irrelevant, since the
+ * shader intersects the real one.
  */
 export function SkyShell({ radius }: Props) {
-  const geometry = useMemo(() => new SphereGeometry(radius + ATMOSPHERE_HEIGHT, 128, 64), [radius])
+  const mesh = useRef<Mesh>(null)
+  const geometry = useMemo(() => new SphereGeometry(1, 128, 64), [])
   useEffect(() => () => geometry.dispose(), [geometry])
-  return <mesh geometry={geometry} material={skyMaterial} />
+
+  useFrame(() => {
+    mesh.current?.scale.setScalar(radius + atmosphereState.height)
+  })
+
+  return <mesh ref={mesh} geometry={geometry} material={skyMaterial} scale={radius + atmosphereState.height} />
 }

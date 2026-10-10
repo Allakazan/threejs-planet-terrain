@@ -1,27 +1,6 @@
-import { DataTexture, LinearFilter, LinearMipmapLinearFilter, RGBAFormat, RepeatWrapping, SRGBColorSpace } from 'three'
-import type { Color } from 'three'
-import { shadingUniforms } from './shadingUniforms'
-
-/**
- * The two materials. Swapping a set is one line here: any folder under
- * `public/textures/terrain/` with an albedo, a **GL** (not DX) normal map and a
- * height map works. Maps are resized to the albedo's size on load.
- */
-const ROOT = `${import.meta.env.BASE_URL}textures/terrain/`
-
-type MaterialSet = { readonly albedo: string; readonly normal: string; readonly height: string }
-
-const GROUND: MaterialSet = {
-  albedo: `${ROOT}Grass001_1K-PNG/Grass001_1K-PNG_Color.png`,
-  normal: `${ROOT}Grass001_1K-PNG/Grass001_1K-PNG_NormalGL.png`,
-  height: `${ROOT}Grass001_1K-PNG/Grass001_1K-PNG_Displacement.png`,
-}
-
-const CLIFF: MaterialSet = {
-  albedo: `${ROOT}forest_ground_04_1k/forest_ground_04_diff_1k.png`,
-  normal: `${ROOT}forest_ground_04_1k/forest_ground_04_nor_gl_1k.png`,
-  height: `${ROOT}forest_ground_04_1k/forest_ground_04_disp_1k.png`,
-}
+import { Color, DataTexture, LinearFilter, LinearMipmapLinearFilter, RGBAFormat, RepeatWrapping, SRGBColorSpace } from 'three'
+import { TEXTURE_PACKS } from './texturePacks'
+import type { TexturePack } from './texturePacks'
 
 const ANISOTROPY = 8
 
@@ -108,30 +87,37 @@ function averageColour(pixels: Pixels, out: Color): void {
   out.setRGB(r / n, g / n, b / n)
 }
 
-async function loadSet(set: MaterialSet, avg: Color): Promise<{ albedo: DataTexture; normal: DataTexture }> {
+/** A pack ready to bind: RGB albedo (sRGB) + A height, the GL normal, and the albedo's linear mean. */
+export type LoadedPack = { readonly albedo: DataTexture; readonly normal: DataTexture; readonly average: Color }
+
+async function loadSet(set: TexturePack): Promise<LoadedPack> {
   const albedo = await loadPixels(set.albedo)
   const size = { width: albedo.width, height: albedo.height }
   const [height, normal] = await Promise.all([loadPixels(set.height, size), loadPixels(set.normal, size)])
-  averageColour(albedo, avg)
+  const average = new Color()
+  averageColour(albedo, average)
   return {
     albedo: tilingTexture(pack(albedo, height), size.width, size.height, true),
     normal: tilingTexture(pack(normal, null), size.width, size.height, false),
+    average,
   }
 }
 
 /**
- * Fire-and-forget, once, from module scope. Until it lands the materials draw
- * the 1×1 stand-ins in `shadingUniforms`; a failure leaves them there and warns.
+ * Loaded packs, by key. Kept for the session, so flipping back to a pack in the
+ * panel is instant; a failed load is dropped, so the next request retries.
  */
-async function loadTerrainTextures(): Promise<void> {
-  const u = shadingUniforms
-  const [ground, cliff] = await Promise.all([loadSet(GROUND, u.uGroundAvg.value), loadSet(CLIFF, u.uCliffAvg.value)])
-  u.uGroundAlbedo.value = ground.albedo
-  u.uGroundNormal.value = ground.normal
-  u.uCliffAlbedo.value = cliff.albedo
-  u.uCliffNormal.value = cliff.normal
-}
+const loaded = new Map<string, Promise<LoadedPack>>()
 
-loadTerrainTextures().catch((error: unknown) => {
-  console.warn('terrain textures failed to load; using flat stand-ins', error)
-})
+/** Loads a pack (once) from `TEXTURE_PACKS`. Rejects on an unknown key or a failed fetch. */
+export function loadTexturePack(key: string): Promise<LoadedPack> {
+  let promise = loaded.get(key)
+  if (promise === undefined) {
+    const set = TEXTURE_PACKS[key]
+    if (set === undefined) return Promise.reject(new Error(`unknown texture pack "${key}"`))
+    promise = loadSet(set)
+    promise.catch(() => loaded.delete(key))
+    loaded.set(key, promise)
+  }
+  return promise
+}
